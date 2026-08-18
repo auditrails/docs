@@ -1,5 +1,5 @@
 ---
-title: "PHP SDK — AuditRails"
+title: "PHP SDK — AuditRails Composer Audit Logging Client"
 sidebarTitle: "PHP"
 description: "Integrate AuditRails into any PHP application. PSR-18 compatible, Laravel-ready, automatic batching, and PSR-3 logger support out of the box."
 ---
@@ -81,7 +81,8 @@ $response = $audit->logDirect(new AuditEvent(
     resource: 'document/doc-789',
 ));
 
-echo $response->logId; // "01HXYZ..."
+echo $response->logId;      // "01HXYZ..."
+echo $response->requestId;  // AuditRails request ID for support
 ```
 
 ### Direct batch logging

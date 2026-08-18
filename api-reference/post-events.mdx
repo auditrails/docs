@@ -1,5 +1,5 @@
 ---
-title: "Log a Single Event — POST /v1/events"
+title: "Log a Single Tamper-Proof Audit Event — POST /v1/events"
 sidebarTitle: "Log Event"
 description: "Append a single tamper-proof audit log entry to your AuditRails stream. Accepts an action, actor, resource, and arbitrary metadata."
 ---
@@ -31,7 +31,7 @@ The `/v1/events` endpoint lets you record a single immutable audit event in your
 ### Body
 
 <ParamField body="action" type="string" required>
-  A string identifying what happened. Maximum 255 characters. Must match an entry in your compliance catalog or be a registered custom action. We strongly recommend the `resource.verb` format (e.g. `user.login`, `document.deleted`, `permission.granted`) for consistency and searchability.
+  A string identifying what happened. Maximum 255 characters. We strongly recommend the `resource.verb` format (e.g. `user.login`, `document.deleted`, `permission.granted`) for consistency and searchability.
 </ParamField>
 
 <ParamField body="actor_id" type="string">

@@ -1,7 +1,7 @@
 ---
-title: "Rate Limits Reference: Quotas & Throttling Rules"
+title: "AuditRails Rate Limits: Quotas and Throttling Rules"
 sidebarTitle: "Rate Limits"
-description: "How AuditRails rate limiting works, which limits apply to your plan and key type, how to handle 429 responses, and best practices for high-throughput logging."
+description: "How AuditRails rate limiting works, which limits apply to your plan and key type, how to handle 429 responses, and tips for high-throughput logging."
 ---
 
 AuditRails enforces rate limits to ensure fair, reliable service for all tenants. All limits use a **fixed-window algorithm** with a one-second window — the counter resets at the start of each new second. Three independent limits are evaluated in order on every inbound request, and the first one exceeded produces a `429` response. Understanding how these layers work together helps you design your integration to stay well within limits and handle throttling gracefully when it does occur.

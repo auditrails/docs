@@ -1,7 +1,7 @@
 ---
-title: "GDPR Compliance with AuditRails"
+title: "GDPR Compliance Guide: DPA, DSARs, Data Residency, and PII"
 sidebarTitle: "GDPR"
-description: "Configure AuditRails as a GDPR-compliant data processor: sign your DPA, handle DSARs, minimise PII in logs, and manage data residency."
+description: "Set up AuditRails as a GDPR-compliant data processor: sign your DPA, handle DSARs, anonymise IPs, apply redaction rules, and configure data residency."
 ---
 
 Under GDPR, AuditRails acts as your **data processor** — it processes personal data on your behalf according to your instructions. You remain the **data controller**, responsible for determining the purpose and means of processing. This guide walks you through signing your Data Processing Agreement, handling Data Subject Access Requests, minimising PII in your logs, and configuring data residency.
@@ -210,11 +210,11 @@ Redaction rules automatically strip known PII field names from event metadata be
 | Plan | Storage region |
 |------|---------------|
 | Developer | `us-east-1` (Northern Virginia, USA) |
-| Starter | `us-east-1` (Northern Virginia, USA) |
-| Pro | `us-east-1` (Northern Virginia, USA) |
-| Enterprise | `us-east-1` or `eu-west-1` (Ireland, EU) |
+| Starter Trails | `us-east-1` (Northern Virginia, USA) |
+| Framework Trails | `us-east-1` (Northern Virginia, USA) |
+| Compliance Trails | `us-east-1` or `eu-west-1` (Ireland, EU) |
 
-If your GDPR obligations require that personal data not leave the EU, you need an **Enterprise plan** with EU storage (`eu-west-1`) enabled. Contact your account manager to configure EU-only storage.
+If your GDPR obligations require that personal data not leave the EU, you need a **Compliance Trails** plan with EU storage (`eu-west-1`) enabled. Contact your account manager to configure EU-only storage.
 
 <Info>
   AWS `eu-west-1` (Ireland) is an EU jurisdiction for GDPR purposes. Data stored there does not transfer outside the EU/EEA under normal operation. The DPA's EU SCCs cover the residual transfer risk associated with US-based sub-processors (Stripe, MaxMind) that do not store audit event data.

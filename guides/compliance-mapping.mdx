@@ -1,7 +1,7 @@
 ---
-title: "Compliance Framework Mapping Guide"
+title: "Compliance Framework Mapping: SOC 2, HIPAA, GDPR, and More"
 sidebarTitle: "Compliance Mapping"
-description: "Map AuditRails features and event types to 10 major compliance frameworks including SOC 2, HIPAA, GDPR, PCI DSS, and more."
+description: "Map AuditRails events and features to all 18 supported compliance frameworks, including SOC 2, HIPAA, PCI DSS v4.0, GDPR, NIS2, DORA, and more."
 ---
 
 AuditRails supports 18 active compliance frameworks out of the box. For each framework, specific event types, storage guarantees, and dashboard features map directly to regulatory controls — so you can demonstrate compliance without manual evidence collection. This guide covers the 10 broadest frameworks in detail, plus a summary of the remaining 8.
@@ -113,7 +113,7 @@ Before mapping events to controls, make sure you're set up correctly.
     | 10.6 — Time sync | Time-range search | Dashboard search |
     | 10.7 — Retention | Up to 7 years | Plan-based retention |
 
-    **Retention:** Up to 7 years (Enterprise plan). PCI DSS requires a minimum of 12 months with 3 months immediately available.
+    **Retention:** Up to 7 years (Compliance Trails). PCI DSS requires a minimum of 12 months with 3 months immediately available.
 
     <Tip>
       Every event in AuditRails includes `actor_id`, `resource`, `action`, `timestamp`, IP address, and outcome fields by default — satisfying Requirement 10.3's "complete record" mandate without extra configuration.

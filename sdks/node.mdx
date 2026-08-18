@@ -1,5 +1,5 @@
 ---
-title: "Node.js & TypeScript SDK — AuditRails"
+title: "Node.js & TypeScript SDK — AuditRails Audit Client"
 sidebarTitle: "Node.js"
 description: "Integrate AuditRails into any Node.js or TypeScript application. Zero dependencies, native fetch, automatic batching, and full TypeScript types included."
 ---
@@ -177,6 +177,7 @@ try {
       err.code,       // Machine-readable error code, e.g. "INVALID_API_KEY"
       err.statusCode, // HTTP status code, e.g. 401
       err.requestId,  // AuditRails request ID for support
+      err.docUrl,     // Link to relevant documentation
       err.retryable,  // Whether retrying the request makes sense
     );
   }

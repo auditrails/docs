@@ -1,7 +1,7 @@
 ---
 title: "Authentication — API Keys and Security Best Practices"
 sidebarTitle: "Authentication"
-description: "Authenticate every AuditRails API request with a Bearer token. Learn key formats, how to initialize each SDK securely, and how to handle authentication errors."
+description: "Authenticate AuditRails API requests with a Bearer token. Learn key formats, secure SDK initialization, and how to handle auth errors."
 ---
 
 Every request to the AuditRails API must be authenticated with an API key passed as a Bearer token. AuditRails supports two key formats — one for production traffic and one for testing — and stores only a SHA-256 hash of each key, so the raw secret is never at risk from a database breach.

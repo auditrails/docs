@@ -1,7 +1,7 @@
 ---
-title: "Data Retention Policies and Storage Tiers"
+title: "Data Retention Policies, Storage Tiers, and WORM Archiving"
 sidebarTitle: "Data Retention"
-description: "Understand AuditRails' two-tier storage architecture, plan-based retention periods, deletion certificates, and DSAR handling."
+description: "Learn how AuditRails' two-tier storage architecture, plan-based retention periods, WORM archiving, and DSAR handling keep your audit logs compliant."
 ---
 
 AuditRails stores every audit event across two independent storage tiers — a hot tier for fast search and analytics, and a cold tier for long-term immutable archiving. Retention periods are determined by your plan and, where applicable, by the compliance frameworks you have enabled. This page explains how each tier works, when data is cleaned up, and what happens when you need to delete data for a DSAR request.
@@ -9,8 +9,8 @@ AuditRails stores every audit event across two independent storage tiers — a h
 ## Storage Tiers
 
 <CardGroup cols={2}>
-  <Card title="Hot Storage — ClickHouse" icon="bolt">
-    Events land here first. ClickHouse provides sub-second full-text search, time-range queries, and aggregations across millions of events. Data is cleaned up via TTL-based partition drops at the end of the retention period.
+  <Card title="Hot Storage — Fast Search" icon="bolt">
+    Events land here first. Hot storage provides sub-second full-text search, time-range queries, and aggregations across millions of events. Data is removed automatically at the end of the retention period.
   </Card>
   <Card title="Cold Storage — S3 Object Lock" icon="lock">
     Every event is simultaneously written to Amazon S3 with **Object Lock in COMPLIANCE mode**. This creates a tamper-proof, immutable archive. The retention expiry is set at write time and cannot be shortened by AuditRails, your AWS account, or anyone else — including AWS support.
@@ -25,26 +25,26 @@ AuditRails stores every audit event across two independent storage tiers — a h
 
 ## Retention Periods by Plan
 
-| Plan | Hot Storage (ClickHouse) | Cold Storage (S3 WORM) |
-|------|--------------------------|------------------------|
+| Plan | Hot Storage | Cold Storage (S3 WORM) |
+|------|-------------|------------------------|
 | Developer | 90 days | 90 days |
-| Starter | 1 year | 1 year |
-| Pro | 1 year | 1 year |
-| Enterprise | 7 years | 7 years |
+| Starter Trails | 1 year | 1 year |
+| Framework Trails | 1 year | 1 year |
+| Compliance Trails | Unlimited | Unlimited |
 
 <Info>
   Compliance frameworks can extend the effective retention period. For example, enabling **SOX** automatically raises your retention to **7 years**; **HIPAA** sets a **6-year** minimum; **NIS2** and **DORA** both require **5 years**. The longest applicable period always wins.
 </Info>
 
-### Enterprise Custom Retention
+### Compliance Trails Custom Retention
 
-On the Enterprise plan you can configure:
+On Compliance Trails you can configure:
 
-- **Up to 10 years** of retention
+- **Custom retention periods** up to 10 years
 - **Per-project retention** — different projects within your organisation can have different retention periods
-- **EU-only storage** — events stored exclusively in `eu-west-1` for GDPR data residency requirements (Developer, Starter, and Pro store data in `us-east-1` only)
+- **EU-only storage** — events stored exclusively in `eu-west-1` for GDPR data residency requirements (Developer, Starter Trails, and Framework Trails store data in `us-east-1` only)
 
-Contact your account manager or open a support ticket to configure custom Enterprise retention.
+Contact your account manager or open a support ticket to configure custom Compliance Trails retention.
 
 ---
 
@@ -53,8 +53,8 @@ Contact your account manager or open a support ticket to configure custom Enterp
 AuditRails runs a daily cleanup job at **02:00 UTC**.
 
 <Steps>
-  <Step title="ClickHouse partition drop">
-    The cleanup job identifies ClickHouse partitions whose TTL has elapsed and drops them. Dropped partitions are unrecoverable from hot storage.
+  <Step title="Hot storage cleanup">
+    The cleanup job removes events from hot storage whose retention period has elapsed. Removed records are unrecoverable from hot storage.
   </Step>
   <Step title="S3 Object Lock expiry">
     S3 Object Lock expiry dates are set at write time. When an object's lock expires, AWS automatically makes it eligible for deletion. AuditRails does not need to take any action — the lifecycle policy handles this.
@@ -96,7 +96,7 @@ When you submit a **right to erasure (Art.17)** request via the DSAR workflow, A
 
 | Storage tier | DSAR delete behaviour |
 |---|---|
-| ClickHouse (hot) | Soft-deleted immediately. Records are excluded from all queries and exports within seconds of the request being processed. |
+| Hot storage | Soft-deleted immediately. Records are excluded from all queries and exports within seconds of the request being processed. |
 | S3 WORM (cold) | Cannot be physically deleted before lock expiry. Records are logically excluded from all reads and exports. Physically deleted automatically when the Object Lock expires. |
 
 ### Legal Basis for Retention
@@ -110,7 +110,7 @@ AuditRails documents this legal basis in the Data Processing Agreement (DPA) ava
 ## Frequently Asked Questions
 
 <Accordion title="Can I increase retention on my current plan?">
-  Retention periods are tied to your plan. To increase beyond your plan's default, either upgrade your plan or enable a compliance framework that requires a longer period (e.g., SOX for 7 years). Enterprise customers can request custom periods up to 10 years.
+  Retention periods are tied to your plan. To increase beyond your plan's default, either upgrade your plan or enable a compliance framework that requires a longer period (e.g., SOX for 7 years). Compliance Trails customers can request custom periods up to 10 years.
 </Accordion>
 
 <Accordion title="Can I decrease or disable retention?">
@@ -126,5 +126,5 @@ AuditRails documents this legal basis in the Data Processing Agreement (DPA) ava
 </Accordion>
 
 <Accordion title="Where is my data stored geographically?">
-  Developer, Starter, and Pro plans store data in `us-east-1` (Northern Virginia, USA). Enterprise plans can choose `us-east-1` or `eu-west-1` (Ireland, EU). EU storage is required for GDPR data residency compliance in certain jurisdictions.
+  Developer, Starter Trails, and Framework Trails store data in `us-east-1` (Northern Virginia, USA). Compliance Trails can choose `us-east-1` or `eu-west-1` (Ireland, EU). EU storage is required for GDPR data residency compliance in certain jurisdictions.
 </Accordion>

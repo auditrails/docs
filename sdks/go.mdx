@@ -1,5 +1,5 @@
 ---
-title: "Go SDK — AuditRails"
+title: "Go SDK — AuditRails Context-Aware Audit Log Client"
 sidebarTitle: "Go"
 description: "Integrate AuditRails into any Go application. Zero dependencies, context-aware logging, automatic batching, and structured logging via slog."
 ---
@@ -193,8 +193,10 @@ resp, err := client.LogDirect(ctx, auditrails.Event{
 if err != nil {
     var apiErr *auditrails.APIError
     if errors.As(err, &apiErr) {
-        fmt.Println(apiErr.StatusCode) // e.g. 401
-        fmt.Println(apiErr.Code)       // e.g. "INVALID_API_KEY"
+        fmt.Println(apiErr.StatusCode)  // e.g. 401
+        fmt.Println(apiErr.Code)        // e.g. "INVALID_API_KEY"
+        fmt.Println(apiErr.RequestID)   // AuditRails request ID for support
+        fmt.Println(apiErr.DocURL)      // Link to relevant documentation
         fmt.Println(apiErr.Retryable()) // true/false
     } else {
         // Network-level error (timeout, DNS failure, etc.)

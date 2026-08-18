@@ -46,7 +46,7 @@ When a data subject exercises their right to erasure under GDPR, you can action 
 After you submit a request, AuditRails carries out the following steps automatically:
 
 1. **Queues and validates the request.** The actor ID is verified against your organisation and the request enters the processing queue.
-2. **Deletes from hot storage (ClickHouse).** All events where `actor_id` exactly matches the supplied value are permanently deleted from the active ClickHouse store. These events immediately stop appearing in dashboard searches, queries, and API reads.
+2. **Deletes from hot storage.** All events where `actor_id` exactly matches the supplied value are permanently deleted from the active hot store. These events immediately stop appearing in dashboard searches, queries, and API reads.
 3. **Handles cold storage (S3 WORM) with a logical deletion.** See the critical limitation below.
 
 ---
@@ -85,6 +85,6 @@ This design is intentional and reflects a deliberate balance between GDPR Articl
 
 - **One active request per actor at a time.** If a deletion request for a given `actor_id` is already in `pending` or `processing` state, submitting a second request for the same actor will be rejected. Wait for the in-flight request to reach `complete` or `failed` before resubmitting.
 - **Actor ID must be an exact match.** The lookup is case-sensitive and matches the literal string stored in the `actor_id` field at event ingestion time. There is no fuzzy matching or alias resolution.
-- **Hot-storage deletion is immediate and irreversible.** Once events are removed from ClickHouse they cannot be recovered. Ensure you have completed any required DSAR Export before submitting a deletion request if you need to provide the data subject with a copy first.
+- **Hot-storage deletion is immediate and irreversible.** Once events are removed from hot storage they cannot be recovered. Ensure you have completed any required DSAR Export before submitting a deletion request if you need to provide the data subject with a copy first.
 - **Cold-storage physical deletion follows your retention schedule.** The exact retention period varies by your AuditRails plan and the compliance framework applied to your organisation. Check **Settings → Organisation** for your specific values.
 - **No API equivalent.** DSAR Delete cannot be triggered via the bearer-token REST API. All erasure requests must be submitted through the dashboard by an Org Admin.

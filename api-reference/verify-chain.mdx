@@ -1,5 +1,5 @@
 ---
-title: "Verify Hash Chain — AuditRails API Reference"
+title: "Verify Audit Hash Chain — AuditRails API Reference"
 sidebarTitle: "Verify Chain"
 description: "Cryptographically verify the tamper-evident SHA-256 hash chain across a range of audit log events to detect unauthorized modifications."
 ---
@@ -81,7 +81,7 @@ The **canonical payload** used for recomputation includes: `log_id`, `tenant_id`
 curl -G https://api.auditrails.io/v1/events/verify \
   -H "Authorization: Bearer at_live_xxx" \
   -d "from_seq=1" \
-  -d "to_seq=5000"
+  -d "to_seq=1000"
 ```
 
 ## Example Response — Chain Intact
@@ -132,7 +132,7 @@ curl -G https://api.auditrails.io/v1/events/verify \
   -d "to_seq=3000"
 ```
 
-Continue advancing the window until `has_more` in your event list confirms you've covered all events, or until a `valid: false` response signals a break in the chain.
+Continue advancing the window until you have covered all chain sequence numbers in your project, or until a `valid: false` response signals a break in the chain. You can determine the highest `chain_seq` in your project by inspecting recent events from the [List Events](/api-reference/get-events) endpoint.
 
 ## Error Responses
 

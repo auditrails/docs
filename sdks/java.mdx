@@ -1,5 +1,5 @@
 ---
-title: "Java SDK — AuditRails"
+title: "Java SDK — AuditRails Audit Logging and Integration"
 sidebarTitle: "Java"
 description: "Integrate AuditRails into any Java application. Zero dependencies, builder pattern, Spring Boot autoconfiguration, and AutoCloseable for safe shutdown."
 ---
@@ -86,18 +86,22 @@ LogResponse response = audit.logDirect(
         .build()
 );
 
-System.out.println(response.logId()); // "01HXYZ..."
+System.out.println(response.logId());     // "01HXYZ..."
+System.out.println(response.requestId()); // AuditRails request ID for support
 ```
 
 ### Direct batch logging
 
-Send multiple events in a single HTTP request, bypassing the buffer.
+Send multiple events in a single HTTP request, bypassing the buffer. Returns a `BatchResponse` with all assigned log IDs.
 
 ```java
-audit.logBatchDirect(List.of(
+import io.auditrails.BatchResponse;
+
+BatchResponse batch = audit.logBatchDirect(List.of(
     AuditEvent.builder("document.created").actorId("user_123").resource("document/doc-001").build(),
     AuditEvent.builder("document.shared").actorId("user_123").resource("document/doc-001").build()
 ));
+System.out.println(batch.logIds()); // ["01HXYZ...", "01HABC..."]
 ```
 
 ### Manual flush
@@ -201,6 +205,8 @@ try {
 } catch (AuditRailsException e) {
     System.out.println(e.getStatusCode()); // HTTP status, e.g. 401
     System.out.println(e.getCode());       // Machine-readable code, e.g. "INVALID_API_KEY"
+    System.out.println(e.getRequestId());  // AuditRails request ID for support
+    System.out.println(e.getDocUrl());     // Link to relevant documentation
     System.out.println(e.isRetryable());   // true/false
 }
 ```

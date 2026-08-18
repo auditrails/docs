@@ -1,5 +1,5 @@
 ---
-title: "DSAR Export — Right of Access & Data Portability"
+title: "DSAR Export — GDPR Right of Access and Data Portability"
 sidebarTitle: "DSAR Export"
 description: "Submit a Data Subject Access Request to export all audit events for a given actor, satisfying GDPR Articles 15 and 20 obligations."
 ---
@@ -45,7 +45,7 @@ When a data subject exercises their right of access or data portability under GD
 
 After you submit a request, AuditRails carries out the following steps automatically:
 
-1. **Scans hot storage.** All events in ClickHouse (your active, searchable log store) where `actor_id` exactly matches the value you supplied are identified across the full retention period for your plan.
+1. **Scans hot storage.** All events in your active, searchable log store where `actor_id` exactly matches the value you supplied are identified across the full retention period for your plan.
 2. **Scans cold storage.** AuditRails also searches your S3 WORM archive for matching events. Cold-storage objects are opened read-only — the originals are never modified or moved as part of this process.
 3. **Compiles the export file.** Matching events from both storage tiers are merged, deduplicated, and compiled into a single downloadable file.
 4. **Makes the download available.** The status in the DSAR history table updates to **complete** and a **Download** link appears. The link is scoped to your organisation and accessible only to Org Admins.

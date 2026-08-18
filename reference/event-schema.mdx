@@ -1,5 +1,5 @@
 ---
-title: "Event Schema Reference: Fields & Structure"
+title: "Event Schema Reference: Input, Enriched & Chain Fields"
 sidebarTitle: "Event Schema"
 description: "Complete reference for AuditRails event fields — what you send, what gets enriched, and how tamper-proof chain fields are computed."
 ---
@@ -123,7 +123,12 @@ The hash is computed over a strict, deterministic subset of fields. Enrichment a
 | `actor_id` | `ip_address` |
 | `resource` | `country` |
 | `metadata` | `city` |
-| | All other enriched fields |
+| | `actor_type` |
+| | `resource_type` |
+| | `category` |
+| | `severity` |
+| | `session_id` |
+| | `ts_client` |
 
 <Warning>
   Do not rely on the presence of any excluded field when computing your own chain verification. Always reconstruct the canonical payload from the six included fields only.

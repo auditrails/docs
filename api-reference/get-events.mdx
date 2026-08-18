@@ -1,5 +1,5 @@
 ---
-title: "List Events — AuditRails API Reference"
+title: "List Audit Log Events — AuditRails API Reference"
 sidebarTitle: "List Events"
 description: "Retrieve a paginated, newest-first list of audit log events. Filter by action, actor, resource, or date range using cursor-based pagination."
 ---
@@ -66,8 +66,26 @@ GET https://api.auditrails.io/v1/events
     <ResponseField name="actor_id" type="string">
       Identifier of the actor who performed the action.
     </ResponseField>
+    <ResponseField name="actor_type" type="string">
+      Semantic type of the actor, for example `user`, `service`, or `system`. Present when supplied at ingestion.
+    </ResponseField>
     <ResponseField name="resource" type="string">
       The resource that was acted upon, such as `session/sess_abc`.
+    </ResponseField>
+    <ResponseField name="resource_type" type="string">
+      Semantic type of the resource, for example `session` or `document`. Present when supplied at ingestion.
+    </ResponseField>
+    <ResponseField name="category" type="string">
+      High-level grouping for the action, for example `auth` or `data_access`. Derived from the action catalog.
+    </ResponseField>
+    <ResponseField name="severity" type="string">
+      Severity level of the event, for example `info`, `warning`, or `critical`. Present when supplied at ingestion or set by the action catalog.
+    </ResponseField>
+    <ResponseField name="session_id" type="string">
+      Session identifier linked to this event. Present when supplied at ingestion.
+    </ResponseField>
+    <ResponseField name="ts_client" type="string">
+      Client-supplied timestamp in ISO 8601 format. Distinct from `timestamp`, which is set server-side at ingestion. Present when supplied at ingestion.
     </ResponseField>
     <ResponseField name="metadata" type="object">
       Arbitrary key-value payload attached when the event was ingested. Contents vary by action type.

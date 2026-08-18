@@ -1,7 +1,7 @@
 ---
-title: "Get Single Event — AuditRails API Reference"
+title: "Get Single Audit Event — AuditRails API Reference"
 sidebarTitle: "Get Event"
-description: "Fetch the full detail of a single audit log event by its ULID log_id, including hash chain fields for tamper verification."
+description: "Fetch complete details of a single audit log event by its ULID log_id, including all hash chain fields for independent tamper verification."
 ---
 
 The Get Single Event endpoint retrieves every field stored for one specific audit log entry, identified by its `log_id`. This is useful when you need to inspect full event detail — including hash chain fields — after spotting an entry of interest in a list query or a dashboard. The response includes the same fields available in the list endpoint, plus additional enrichment fields such as `actor_type`, `resource_type`, `category`, `severity`, and `session_id`.
@@ -129,9 +129,14 @@ curl https://api.auditrails.io/v1/events/01HX7YGBFZ3QK8N9VMJT5RPCE4 \
   "schema_version": 1,
   "action": "user.login",
   "actor_id": "user_123",
+  "actor_type": "user",
   "resource": "session/sess_abc",
+  "resource_type": "session",
+  "category": "auth",
+  "severity": "info",
+  "session_id": "ses_xyz789",
+  "ts_client": "2025-01-15T10:29:59.800Z",
   "metadata": {
-    "ip": "203.0.113.1",
     "method": "password"
   },
   "timestamp": "2025-01-15T10:30:00.123Z",

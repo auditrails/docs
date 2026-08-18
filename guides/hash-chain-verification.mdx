@@ -1,7 +1,7 @@
 ---
-title: "Hash Chain Verification for Audit Logs"
+title: "Hash Chain Verification: Tamper-Proof Audit Log Integrity"
 sidebarTitle: "Hash Chain"
-description: "Understand how AuditRails uses SHA-256 hash chaining to make your audit logs tamper-proof, and how to verify chain integrity."
+description: "Understand how AuditRails SHA-256 hash chaining makes audit logs tamper-proof, and how to verify chain integrity via the dashboard or API."
 ---
 
 Every event written to AuditRails is cryptographically linked to the one before it. If anyone deletes, modifies, or inserts an event — even at the infrastructure level — the chain breaks at that point and verification fails. This page explains how the chain is constructed, how to verify it from the dashboard or the API, and what to do if a break is detected.
@@ -30,7 +30,7 @@ The canonical payload is a deterministic JSON serialisation of the core event fi
 ```
 
 <Info>
-  Worker-enriched fields — `country`, `city`, `ip_address`, and the chain fields themselves (`chain_seq`, `hash`, `previous_hash`) — are deliberately excluded from the canonical payload. This ensures the hash is stable regardless of how AuditRails enriches the event after ingestion.
+  Worker-enriched fields — `country`, `city`, `ip_address`, and the chain fields themselves (`chain_seq`, `hash`, `prev_hash`) — are deliberately excluded from the canonical payload. This ensures the hash is stable regardless of how AuditRails enriches the event after ingestion.
 </Info>
 
 ### Genesis Event

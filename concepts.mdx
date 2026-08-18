@@ -1,7 +1,7 @@
 ---
-title: "Core Concepts — How AuditRails Works"
+title: "Core Concepts: Events, Hash Chains, and AuditRails Storage"
 sidebarTitle: "Concepts"
-description: "Learn the core building blocks of AuditRails: organizations, projects, events, tamper-proof hash chains, dual-tier storage, retention policies, and API key scoping."
+description: "Understand how AuditRails structures organizations, projects, events, hash chains, dual-tier storage, and plan-based retention policies."
 ---
 
 Understanding a handful of core concepts will help you design your audit logging integration correctly from the start. This page explains how AuditRails structures your data, how the tamper-proof hash chain works under the hood, where your logs are physically stored, and how long they're kept depending on your plan.
@@ -17,9 +17,9 @@ An **Organization** (also called a Tenant) is the top-level account boundary in 
 | Plan | Retention | Best For |
 |---|---|---|
 | Developer | 90 days | Personal projects, prototypes |
-| Starter | 1 year | Small production applications |
-| Pro | 1 year | Growing teams with multiple services |
-| Enterprise | 7 years | Regulated industries, long-term compliance |
+| Starter Trails | 1 year | Small production applications |
+| Framework Trails | 1 year | Growing teams with multiple services |
+| Compliance Trails | 7 years | Regulated industries, long-term compliance |
 
 ### Roles
 
@@ -94,12 +94,12 @@ Hash chaining is the core mechanism that makes AuditRails tamper-proof. Every ev
 ### The Formula
 
 ```
-hash = SHA-256(previous_hash + canonical_payload + timestamp)
+hash = SHA-256(previous_hash + canonical_payload + timestamp_ms)
 ```
 
 - **`previous_hash`** — the SHA-256 hash of the immediately preceding event in your tenant's chain.
 - **`canonical_payload`** — the deterministically serialized event fields (action, actor_id, resource, metadata).
-- **`timestamp`** — the server-assigned ingest timestamp for this event.
+- **`timestamp_ms`** — the server-assigned ingest timestamp for this event, expressed in milliseconds since epoch.
 
 ### Genesis Event
 
@@ -149,9 +149,9 @@ Retention periods are determined by your plan and begin from the event's ingest 
 | Plan | Hot Storage | Cold Storage (WORM) |
 |---|---|---|
 | Developer | 90 days | 90 days |
-| Starter | 1 year | 1 year |
-| Pro | 1 year | 1 year |
-| Enterprise | 7 years | 7 years |
+| Starter Trails | 1 year | 1 year |
+| Framework Trails | 1 year | 1 year |
+| Compliance Trails | 7 years | 7 years |
 
 <Info>
   Upgrading your plan does **not** retroactively extend the retention of existing events. Events already written are retained for the period that was active when they were ingested. New events pick up the new retention period immediately.

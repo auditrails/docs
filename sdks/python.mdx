@@ -1,5 +1,5 @@
 ---
-title: "Python SDK — AuditRails"
+title: "Python SDK — AuditRails Sync and Async Audit Client"
 sidebarTitle: "Python"
 description: "Integrate AuditRails into any Python application. Sync and async clients, zero dependencies for sync, Django and FastAPI integration examples included."
 ---
@@ -209,17 +209,20 @@ async def delete_document(doc_id: str, user_id: str):
 
 ## Error handling
 
-`log()` never raises. For `log_direct()` and `log_batch_direct()`, catch `AuditRailsError` to inspect the failure details.
+`log()` never raises. For `log_direct()` and `log_batch_direct()`, catch `AuditRailsError` to inspect the failure details. `AuditRailsTimeoutError` is a subclass specifically for request timeouts.
 
 ```python
-from auditrails import AuditRailsError, AuditEvent
+from auditrails import AuditRailsError, AuditRailsTimeoutError, AuditEvent
 
 try:
     audit.log_direct(AuditEvent(action="user.login", actor_id="user_123"))
+except AuditRailsTimeoutError:
+    print("Request timed out")
 except AuditRailsError as e:
     print(e.status_code)  # HTTP status, e.g. 401
     print(e.code)         # Machine-readable code, e.g. "INVALID_API_KEY"
     print(e.request_id)   # AuditRails request ID for support
+    print(e.doc_url)      # Link to relevant documentation
     print(e.retryable)    # True if retrying might succeed
 ```
 
