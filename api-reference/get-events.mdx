@@ -1,0 +1,217 @@
+---
+title: List Events
+description: Query audit events with filters, pagination, and time ranges.
+api: GET /v1/events
+---
+
+# List Events
+
+Retrieve audit events for your project with optional filters. Results are returned in reverse chronological order (newest first, by descending `log_id`), using cursor-based pagination.
+
+## Query Parameters
+
+<ParamField query="action" type="string">
+  Filter by exact action name (e.g., `user.login`). Exact match only — no wildcard/partial matching.
+</ParamField>
+
+<ParamField query="actor_id" type="string">
+  Filter by exact actor identifier. Exact match only.
+</ParamField>
+
+<ParamField query="resource" type="string">
+  Filter by exact resource identifier. Exact match only.
+</ParamField>
+
+<ParamField query="date_from" type="string">
+  Filter events on or after this date, `YYYY-MM-DD` (date only, not a full timestamp). Inclusive.
+</ParamField>
+
+<ParamField query="date_to" type="string">
+  Filter events on or before this date, `YYYY-MM-DD` (date only, not a full timestamp). Inclusive.
+</ParamField>
+
+<ParamField query="cursor" type="string">
+  Pagination cursor — pass the `next_cursor` value from a previous response to fetch the next page.
+</ParamField>
+
+<ParamField query="limit" type="integer" default="50">
+  Number of events to return. Minimum 1, maximum 100 — values outside that range fall back to the default of 50.
+</ParamField>
+
+## Response
+
+<ResponseField name="events" type="array">
+  Array of event objects.
+
+  <Expandable title="Event object">
+    <ResponseField name="log_id" type="string">
+      Unique event identifier (ULID format).
+    </ResponseField>
+
+    <ResponseField name="tenant_id" type="string">
+      Your organization's ID.
+    </ResponseField>
+
+    <ResponseField name="project_id" type="string">
+      The project this event belongs to.
+    </ResponseField>
+
+    <ResponseField name="schema_version" type="integer">
+      Internal event schema version.
+    </ResponseField>
+
+    <ResponseField name="action" type="string">
+      The action that was performed.
+    </ResponseField>
+
+    <ResponseField name="actor_id" type="string">
+      Who performed the action.
+    </ResponseField>
+
+    <ResponseField name="actor_type" type="string">
+      Type of actor, when set (e.g., `user`, `system`).
+    </ResponseField>
+
+    <ResponseField name="resource" type="string">
+      What was affected.
+    </ResponseField>
+
+    <ResponseField name="resource_type" type="string">
+      Type of resource, when set.
+    </ResponseField>
+
+    <ResponseField name="category" type="string">
+      Category, when set (from the compliance action catalog).
+    </ResponseField>
+
+    <ResponseField name="severity" type="string">
+      Severity, when set.
+    </ResponseField>
+
+    <ResponseField name="session_id" type="string">
+      Session identifier, when set.
+    </ResponseField>
+
+    <ResponseField name="ts_client" type="string">
+      Client-supplied timestamp, when set — distinct from `timestamp` below, which is always server-assigned.
+    </ResponseField>
+
+    <ResponseField name="metadata" type="object">
+      Additional context key-value pairs.
+    </ResponseField>
+
+    <ResponseField name="timestamp" type="string">
+      Server timestamp when the event was received (ISO 8601).
+    </ResponseField>
+
+    <ResponseField name="ip_address" type="string">
+      Source IP address of the original API request.
+    </ResponseField>
+
+    <ResponseField name="country" type="string">
+      Country code derived from source IP (e.g., `US`).
+    </ResponseField>
+
+    <ResponseField name="city" type="string">
+      City derived from source IP (e.g., `San Francisco`).
+    </ResponseField>
+
+    <ResponseField name="hash" type="string">
+      Cryptographic hash of this event in the integrity chain.
+    </ResponseField>
+
+    <ResponseField name="prev_hash" type="string">
+      Hash of the previous event in the integrity chain.
+    </ResponseField>
+
+    <ResponseField name="chain_seq" type="integer">
+      Sequential position in the hash chain.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="next_cursor" type="string">
+  Cursor for the next page — pass as the `cursor` query parameter. Empty when there are no more results.
+</ResponseField>
+
+<ResponseField name="has_more" type="boolean">
+  Whether more events exist beyond the current page.
+</ResponseField>
+
+<Note>
+There's no `total` field or `request_id` in the response body for this endpoint (unlike the write endpoints) — use the `X-Request-Id` response header for tracing.
+</Note>
+
+## Examples
+
+### curl
+
+```bash
+curl -G https://api.auditrails.io/v1/events \
+  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -d "action=user.login" \
+  -d "date_from=2025-01-01" \
+  -d "date_to=2025-01-31" \
+  -d "limit=10"
+```
+
+### 200 OK
+
+```json
+{
+  "events": [
+    {
+      "log_id": "01HX7YGBFZ3QK8N9VMJT5RPCE4",
+      "tenant_id": "org_abc123",
+      "project_id": "proj_def456",
+      "schema_version": 1,
+      "action": "user.login",
+      "actor_id": "user_123",
+      "resource": "session/sess_abc",
+      "metadata": {
+        "ip": "203.0.113.1",
+        "method": "password"
+      },
+      "timestamp": "2025-01-15T10:30:00.123Z",
+      "ip_address": "203.0.113.1",
+      "country": "US",
+      "city": "San Francisco",
+      "hash": "a1b2c3...",
+      "prev_hash": "9f8e7d...",
+      "chain_seq": 4213
+    }
+  ],
+  "next_cursor": "01HX7XKQT82FM4NPWRJ6DSCBA3",
+  "has_more": true
+}
+```
+
+## Error Responses
+
+Every error uses the same envelope — see [Error Codes](/reference/error-codes) for the full list.
+
+### 401 Unauthorized
+
+```json
+{
+  "error": {
+    "code": "auth/key_not_found",
+    "message": "API key not found. Verify the key is correct or generate a new one in the dashboard.",
+    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```
+
+### 500 Internal Server Error
+
+```json
+{
+  "error": {
+    "code": "read/query_failed",
+    "message": "Failed to query events. Please retry.",
+    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```

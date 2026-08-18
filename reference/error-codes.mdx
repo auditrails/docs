@@ -1,0 +1,102 @@
+---
+title: Error Codes
+description: Complete list of AuditRails API error codes with causes and fixes.
+---
+
+# Error Codes
+
+All API errors return a structured JSON response:
+
+```json
+{
+  "error": {
+    "code": "auth/key_not_found",
+    "message": "API key not found. Verify the key is correct or generate a new one in the dashboard.",
+    "request_id": "req_01HX...",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```
+
+`doc_url` always points to this page — there isn't a separate page per error code. Some `action/*` errors also include `suggestion` and `valid_actions_url` fields (the latter links to [`GET /v1/actions`](/api-reference/actions)).
+
+## Authentication Errors (401)
+
+| Code | Message | Fix |
+|------|---------|-----|
+| `auth/missing_header` | Missing Authorization header | Add `Authorization: Bearer at_live_...` (or `at_test_...`) |
+| `auth/invalid_format` | Invalid Authorization header format | Header must be exactly `Bearer <api_key>` |
+| `auth/key_not_found` | API key not found | Check the key is correct, or generate a new one in the dashboard |
+| `auth/key_revoked` | API key has been revoked | Generate a new key in the dashboard |
+| `auth/key_expired` | API key has expired | Generate a new key in the dashboard |
+
+## Subscription Errors (402)
+
+| Code | Message | Fix |
+|------|---------|-----|
+| `subscription/trial_expired` | Your trial has ended | Add a payment method in the dashboard — existing data is retained |
+
+## Rate Limiting Errors (429)
+
+| Code | Message | Fix |
+|------|---------|-----|
+| `rate/limit_exceeded` | Your plan's rate limit was exceeded | Wait for `Retry-After` seconds, or upgrade your plan |
+| `rate/ip_limit_exceeded` | Per-IP rate limit exceeded (100 req/s) | Applies before authentication, per source IP, regardless of key — spread traffic across more IPs or slow down |
+| `rate/test_limit_exceeded` | Test-mode key rate limit exceeded (60 req/s by default) | `at_test_...` keys have their own small, plan-independent pool — use a live key for production load |
+
+Every `429` response includes a `Retry-After` header (seconds to wait).
+
+## Validation Errors
+
+| Code | Status | Message | Fix |
+|------|--------|---------|-----|
+| `validation/missing_action` | 422 | The `action` field is required | Include `action` in your event payload |
+| `validation/invalid_json` | 400 | Request body contains invalid JSON | Check your JSON syntax |
+| `validation/batch_too_large` | 400 | Batch size exceeds maximum of 100 events | Split into multiple batch requests |
+| `validation/batch_empty` | 400 | The events array is empty | Include at least one event in the batch |
+| `validation/body_too_large` | 413 | Request body exceeds the maximum allowed size | 256KB for a single event, 2MB for a batch |
+
+## Event Errors
+
+| Code | Status | Message | Fix |
+|------|--------|---------|-----|
+| `event/write_failed` | 500 | Failed to process the event | Retry the request |
+| `event/idempotency_key_conflict` | 409 | The `Idempotency-Key` was reused with a different request body | Use a new key, or replay the exact original request |
+| `event/idempotency_key_in_flight` | 409 | A request with this `Idempotency-Key` is already being processed | Retry shortly |
+
+## Read Errors
+
+| Code | Status | Message | Fix |
+|------|--------|---------|-----|
+| `read/invalid_params` | 400 | Invalid query parameters | Check the parameter name/format against the endpoint's reference page |
+| `read/query_failed` | 500 | Failed to query events | Retry the request |
+| `read/not_found` | 404 | Event not found | Check the `log_id` and that the event belongs to this API key's project |
+
+## Action Catalog & Framework Errors
+
+| Code | Status | Message | Fix |
+|------|--------|---------|-----|
+| `action/invalid` | 422 | Action is not a valid compliance action | Check spelling, or see [`GET /v1/actions`](/api-reference/actions) for the live catalog |
+| `action/requires_framework` | 403 | Action requires a framework your organization hasn't subscribed to | Add the framework in the dashboard's Billing page |
+| `action/missing_required_fields` | 422 | Action is missing required field(s) | See [`GET /v1/actions`](/api-reference/actions)'s `required_fields` for that action |
+| `framework/disabled` | 403 | Action only belongs to frameworks that aren't currently active on the platform | Contact support if you need it activated |
+
+## Server Errors (500)
+
+| Code | Message | Fix |
+|------|---------|-----|
+| `server/internal` | An internal error occurred | Retry the request. If persistent, contact support |
+
+<Info>
+All SDKs automatically retry 5xx errors with exponential backoff. You only need to handle these if making direct HTTP calls.
+</Info>
+
+## Using Request IDs for Support
+
+Every response includes a `request_id` (also in the `X-Request-Id` header). When contacting support:
+
+1. Include the `request_id` from the error response
+2. Include the timestamp of the request
+3. Include the API key prefix (first 10 characters, e.g., `at_live_abc`)
+
+This allows us to trace the exact request through our systems.

@@ -1,0 +1,68 @@
+---
+title: Rate Limits
+description: Per-plan rate limits and how to handle 429 responses.
+---
+
+# Rate Limits
+
+AuditRails enforces rate limits using a fixed-window algorithm (one window per second), checked in this order: a per-IP limit (before auth), then a per-plan limit (live keys) or a separate test-key limit (`at_test_…` keys).
+
+## Limits by Plan
+
+| Plan | Requests/second | Events/month included | Batch size |
+|------|----------------|------------------------|------------|
+| **Starter Trails** | 1,000 | 250,000 | 100 |
+| **Framework Trails** | 1,000 | 1,000,000 | 100 |
+| **Compliance Trails** | 1,000 | Unlimited | 100 |
+
+Plan limits are admin-configurable per tenant — the dashboard's Billing page is the source of truth for your exact current values, these are the defaults.
+
+## Per-IP and Test-Key Limits
+
+Two more limits apply regardless of plan:
+
+| Scope | Limit | Error code |
+|-------|-------|------------|
+| Per source IP (before auth, every request) | 100 req/s | `rate/ip_limit_exceeded` |
+| `at_test_…` keys (separate pool, not your plan's limit) | 60 req/s by default | `rate/test_limit_exceeded` |
+
+## No Rate-Limit Headers on Success
+
+AuditRails does not return `X-RateLimit-Limit`/`X-RateLimit-Remaining`/`X-RateLimit-Reset` headers on successful responses. The only rate-limit-related header is `Retry-After`, present only on `429` responses.
+
+## Handling 429 Responses
+
+When you exceed any of the limits above, the API returns:
+
+```json
+{
+  "error": {
+    "code": "rate/limit_exceeded",
+    "message": "Starter Trails plan: 1000 req/s limit exceeded. Retry after the Retry-After duration.",
+    "request_id": "req_01HX...",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```
+
+`code` is `rate/ip_limit_exceeded` or `rate/test_limit_exceeded` for those cases instead. The `Retry-After` header indicates how many seconds to wait:
+
+```
+HTTP/1.1 429 Too Many Requests
+Retry-After: 1
+```
+
+## SDK Behavior
+
+All official SDKs handle rate limiting automatically:
+
+- **`log()` (buffered):** Events are batched, reducing request count. Rate limit errors on batch sends are retried with backoff.
+- **`logDirect()` (immediate):** Rate limit errors are propagated to your code as exceptions.
+
+## Best Practices
+
+1. **Use batch mode** — `log()` automatically batches up to 100 events per request
+2. **Use `logDirect()` sparingly** — only for compliance-critical events that need confirmation
+3. **Respect `Retry-After` and back off exponentially** — there's no remaining-quota header to poll proactively
+4. **Use a live key, not a test key, for anything beyond light testing** — test keys share a much smaller fixed pool
+5. **Upgrade your plan** if you consistently hit your monthly events quota

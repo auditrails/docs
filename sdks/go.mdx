@@ -1,0 +1,214 @@
+---
+title: Go SDK
+description: Official AuditRails SDK for Go — zero dependencies, goroutine batching, context support.
+---
+
+# Go SDK
+
+The `auditrails-go` package provides a zero-dependency client for logging audit events from Go applications. It uses only `net/http` from the standard library and batches events via a background goroutine.
+
+Source: [github.com/auditrails/auditrails-go](https://github.com/auditrails/auditrails-go)
+
+## Installation
+
+```bash
+go get github.com/auditrails/auditrails-go
+```
+
+Requires **Go 1.21+**. Zero external dependencies.
+
+## Initialization
+
+```go
+import auditrails "github.com/auditrails/auditrails-go"
+
+client, err := auditrails.New(os.Getenv("AUDITRAILS_API_KEY"), nil)
+if err != nil {
+    log.Fatal(err)
+}
+defer client.Close()
+```
+
+### Options
+
+Pass an `Options` struct as the second argument, or `nil` for defaults:
+
+```go
+client, err := auditrails.New("at_live_...", &auditrails.Options{
+    BaseURL:       "https://api.auditrails.io", // default
+    BatchSize:     100,                          // max events per batch (capped at 100)
+    FlushInterval: time.Second,                  // auto-flush interval
+    MaxRetries:    3,                             // retry attempts on 5xx
+    Timeout:       10 * time.Second,              // HTTP timeout
+    Logger:        slog.Default(),                // structured logger
+    HTTPClient:    &http.Client{},                // custom HTTP client
+})
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `BaseURL` | `string` | `https://api.auditrails.io` | API endpoint |
+| `BatchSize` | `int` | `100` | Max events per batch (capped at 100) |
+| `FlushInterval` | `time.Duration` | `1s` | Auto-flush interval |
+| `MaxRetries` | `int` | `3` | Retry attempts on 5xx errors |
+| `Timeout` | `time.Duration` | `10s` | HTTP request timeout |
+| `Logger` | `*slog.Logger` | `slog.Default()` | Structured logger for SDK messages |
+| `HTTPClient` | `*http.Client` | auto-created | Custom HTTP client |
+
+## Logging Events
+
+### Buffered (fire-and-forget)
+
+`Log()` buffers the event and returns immediately. It never returns an error.
+
+```go
+client.Log(auditrails.Event{
+    Action:   "user.login",
+    ActorID:  "user_123",
+    Resource: "session/sess_abc",
+    Metadata: map[string]any{"ip": "203.0.113.1", "method": "oauth2"},
+})
+```
+
+### LogWithContext
+
+`LogWithContext()` respects context cancellation. If the context is already done, the event is silently dropped.
+
+```go
+client.LogWithContext(ctx, auditrails.Event{
+    Action:  "document.viewed",
+    ActorID: userID,
+    Resource: fmt.Sprintf("document/%s", docID),
+})
+```
+
+### Direct (blocking)
+
+`LogDirect()` sends immediately and returns the API response. It accepts a context for cancellation and timeouts.
+
+```go
+resp, err := client.LogDirect(ctx, auditrails.Event{
+    Action:   "document.deleted",
+    ActorID:  "user_456",
+    Resource: "document/doc-789",
+})
+if err != nil {
+    log.Printf("audit error: %v", err)
+}
+fmt.Println(resp.LogID)     // "01HXYZ..."
+fmt.Println(resp.RequestID) // "req_..."
+```
+
+### Batch Direct
+
+```go
+resp, err := client.LogBatchDirect(ctx, []auditrails.Event{
+    {Action: "user.login", ActorID: "user_1"},
+    {Action: "user.login", ActorID: "user_2"},
+})
+if err != nil {
+    log.Printf("audit error: %v", err)
+}
+fmt.Println(resp.LogIDs) // ["01HX...", "01HX..."]
+```
+
+## net/http Middleware
+
+```go
+package main
+
+import (
+    "net/http"
+    auditrails "github.com/auditrails/auditrails-go"
+)
+
+func auditMiddleware(client *auditrails.Client, action string) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            next.ServeHTTP(w, r)
+
+            client.LogWithContext(r.Context(), auditrails.Event{
+                Action:   action,
+                ActorID:  r.Header.Get("X-User-ID"),
+                Resource: r.Method + " " + r.URL.Path,
+                Metadata: map[string]any{
+                    "ip":         r.RemoteAddr,
+                    "user_agent": r.UserAgent(),
+                },
+            })
+        })
+    }
+}
+
+func main() {
+    client, _ := auditrails.New("at_live_...", nil)
+    defer client.Close()
+
+    mux := http.NewServeMux()
+    mux.HandleFunc("/documents", handleDocuments)
+
+    handler := auditMiddleware(client, "api.request")(mux)
+    http.ListenAndServe(":8080", handler)
+}
+```
+
+## Error Handling
+
+`Log()` and `LogWithContext()` never return errors. For `LogDirect()` and `LogBatchDirect()`, check for `*APIError`:
+
+```go
+resp, err := client.LogDirect(ctx, event)
+if err != nil {
+    var apiErr *auditrails.APIError
+    if errors.As(err, &apiErr) {
+        fmt.Println(apiErr.StatusCode) // 429
+        fmt.Println(apiErr.Code)       // "rate/limit_exceeded"
+        fmt.Println(apiErr.RequestID)  // "req_01HX..."
+        fmt.Println(apiErr.DocURL)     // "https://docs.auditrails.io/reference/error-codes"
+        fmt.Println(apiErr.Retryable()) // false (true for 5xx)
+    }
+}
+```
+
+## Graceful Shutdown
+
+Always use `defer client.Close()` to ensure buffered events are flushed before the process exits:
+
+```go
+func main() {
+    client, err := auditrails.New("at_live_...", nil)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer client.Close() // flushes buffer, stops goroutine
+
+    // ... application code
+}
+```
+
+`Close()` does the following in order:
+
+1. Marks the client as closed (future `Log()` calls are silently ignored).
+2. Signals the background goroutine to stop and waits for it to finish.
+3. Flushes any remaining buffered events.
+
+For HTTP servers, call `Close()` in your shutdown handler:
+
+```go
+srv := &http.Server{Addr: ":8080", Handler: mux}
+
+// Graceful shutdown
+quit := make(chan os.Signal, 1)
+signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+<-quit
+
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+srv.Shutdown(ctx)
+
+client.Close() // flush audit events after server stops accepting requests
+```
+
+## Zero Dependencies
+
+The Go SDK uses only standard library packages (`net/http`, `encoding/json`, `log/slog`, `sync`, `context`). No external modules are required.

@@ -1,0 +1,96 @@
+---
+title: API Overview
+description: Base URL, authentication, headers, and conventions for the AuditRails REST API.
+---
+
+# API Overview
+
+The AuditRails REST API lets you ingest, query, and verify tamper-proof audit events. All SDKs are thin wrappers around this API.
+
+## Base URL
+
+```
+https://api.auditrails.io
+```
+
+All endpoints are versioned under `/v1/`.
+
+## Authentication
+
+Every request must include a Bearer token in the `Authorization` header:
+
+```bash
+Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+See [Authentication](/api-reference/authentication) for details on API key formats and error handling.
+
+## Content Type
+
+All request and response bodies are JSON:
+
+```
+Content-Type: application/json
+```
+
+## Request IDs
+
+Every response includes an `X-Request-Id` header with a unique identifier in `req_ULID` format:
+
+```
+X-Request-Id: req_01HX7YGBFZ3QK8N9VMJT5RPCE4
+```
+
+Request IDs are also included in all error response bodies. Include this ID when contacting support to help us trace the request through our systems.
+
+## Rate Limiting
+
+Requests are rate-limited per second based on your subscription plan (all three live plans — Starter Trails, Framework Trails, Compliance Trails — currently default to 1,000 req/s; check your exact limit on the dashboard's Billing page). `at_test_…` keys draw from a separate, much smaller pool (60 req/s by default) instead of your plan's limit. There's also a per-IP limit (100 req/s) applied before authentication.
+
+A `429` response includes a `Retry-After` header (seconds to wait) — there are no `X-RateLimit-*` headers on successful responses. See [Rate Limits](/api-reference/rate-limits) for the full picture.
+
+## Endpoints
+
+### Ingestion
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | [`/v1/events`](/api-reference/post-events) | Log a single audit event |
+| `POST` | [`/v1/events/batch`](/api-reference/post-events-batch) | Log up to 100 events in one request |
+
+### Read
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | [`/v1/events`](/api-reference/get-events) | List events with filters |
+| `GET` | [`/v1/events/{log_id}`](/api-reference/get-event) | Get a single event with chain info |
+| `GET` | [`/v1/events/verify`](/api-reference/verify-chain) | Verify hash chain integrity |
+| `GET` | [`/v1/actions`](/api-reference/actions) | List the compliance action catalog |
+
+### DSAR (Data Subject Access Requests)
+
+<Note>
+DSAR is a **dashboard-only** feature today — there is no `at_live_…`-authenticated API endpoint for it. See [DSAR Export](/api-reference/dsar-export) for the real, session-authenticated flow through Settings.
+</Note>
+
+## Error Format
+
+All errors follow a consistent structure:
+
+```json
+{
+  "error": {
+    "code": "validation/missing_action",
+    "message": "The 'action' field is required.",
+    "request_id": "req_01HX7YGBFZ3QK8N9VMJT5RPCE4",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `code` | Machine-readable, namespaced error code (e.g., `auth/key_not_found`, `validation/missing_action`) — see [Error Codes](/reference/error-codes) |
+| `message` | Human-readable description |
+| `request_id` | Unique request identifier for debugging |
+| `doc_url` | Link to the error-codes reference page |

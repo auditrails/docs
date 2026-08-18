@@ -1,0 +1,270 @@
+---
+title: Java SDK
+description: Official AuditRails SDK for Java — builder pattern, AutoCloseable, zero dependencies.
+---
+
+# Java SDK
+
+The `auditrails-java` package provides a zero-dependency client for logging audit events from Java applications. It uses `HttpURLConnection` from the standard library, supports the builder pattern, and implements `AutoCloseable` for try-with-resources.
+
+Source: [github.com/auditrails/auditrails-java](https://github.com/auditrails/auditrails-java)
+
+## Installation
+
+<CodeGroup>
+
+```xml Maven
+<dependency>
+    <groupId>io.auditrails</groupId>
+    <artifactId>auditrails-java</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
+```groovy Gradle
+implementation 'io.auditrails:auditrails-java:1.0.0'
+```
+
+</CodeGroup>
+
+Requires **Java 11+**. Zero external dependencies.
+
+## Initialization
+
+```java
+import io.auditrails.AuditRails;
+
+AuditRails audit = AuditRails.builder("at_live_...")
+    .build();
+```
+
+### Builder Options
+
+```java
+AuditRails audit = AuditRails.builder("at_live_...")
+    .baseUrl("https://api.auditrails.io")  // default
+    .batchSize(100)                         // max events per batch (capped at 100)
+    .flushIntervalMs(1000)                  // auto-flush interval in ms
+    .maxRetries(3)                          // retry attempts on 5xx
+    .timeoutMs(10_000)                      // HTTP timeout in ms
+    .build();
+```
+
+| Method | Type | Default | Description |
+|--------|------|---------|-------------|
+| `builder(apiKey)` | `String` | **required** | Your API key (`at_live_...` or `at_test_...`) |
+| `baseUrl()` | `String` | `https://api.auditrails.io` | API endpoint |
+| `batchSize()` | `int` | `100` | Max events per batch (capped at 100) |
+| `flushIntervalMs()` | `long` | `1000` | Auto-flush interval in milliseconds |
+| `maxRetries()` | `int` | `3` | Retry attempts on 5xx errors |
+| `timeoutMs()` | `int` | `10000` | HTTP request timeout in milliseconds |
+
+## Logging Events
+
+### Buffered (fire-and-forget)
+
+`log()` buffers the event and returns immediately. It never throws.
+
+```java
+import io.auditrails.AuditEvent;
+
+audit.log(AuditEvent.builder("user.login")
+    .actorId("user_123")
+    .resource("session/sess_abc")
+    .metadata(Map.of("ip", "203.0.113.1", "method", "oauth2"))
+    .build());
+```
+
+### Event Builder
+
+`AuditEvent` uses the builder pattern. Only `action` is required.
+
+```java
+AuditEvent event = AuditEvent.builder("document.created")
+    .actorId("user_456")
+    .resource("document/doc-789")
+    .metadata(Map.of("title", "Q4 Report"))
+    .addMetadata("source", "api")   // add individual metadata entries
+    .build();
+```
+
+### Direct (blocking)
+
+`logDirect()` sends immediately and returns the API response. It throws on errors.
+
+```java
+import io.auditrails.LogResponse;
+
+LogResponse response = audit.logDirect(
+    AuditEvent.builder("document.deleted")
+        .actorId("user_456")
+        .resource("document/doc-789")
+        .build()
+);
+System.out.println(response.logId());     // "01HXYZ..."
+System.out.println(response.requestId()); // "req_..."
+```
+
+### Batch Direct
+
+```java
+import io.auditrails.BatchResponse;
+
+BatchResponse response = audit.logBatchDirect(List.of(
+    AuditEvent.builder("user.login").actorId("user_1").build(),
+    AuditEvent.builder("user.login").actorId("user_2").build()
+));
+System.out.println(response.logIds()); // ["01HX...", "01HX..."]
+```
+
+## Spring Boot Integration
+
+### Bean Configuration
+
+Register the client as a Spring Bean with `destroyMethod="close"` to ensure graceful shutdown:
+
+```java
+import io.auditrails.AuditRails;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class AuditRailsConfig {
+
+    @Bean(destroyMethod = "close")
+    public AuditRails auditRails(@Value("${auditrails.api-key}") String apiKey) {
+        return AuditRails.builder(apiKey).build();
+    }
+}
+```
+
+```yaml
+# application.yml
+auditrails:
+  api-key: ${AUDITRAILS_API_KEY}
+```
+
+### Spring Interceptor
+
+```java
+import io.auditrails.AuditRails;
+import io.auditrails.AuditEvent;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.HandlerInterceptor;
+
+import java.util.Map;
+
+@Component
+public class AuditInterceptor implements HandlerInterceptor {
+
+    private final AuditRails audit;
+
+    public AuditInterceptor(AuditRails audit) {
+        this.audit = audit;
+    }
+
+    @Override
+    public void afterCompletion(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Object handler,
+            Exception ex) {
+
+        audit.log(AuditEvent.builder("api.request")
+            .actorId(request.getHeader("X-User-ID"))
+            .resource(request.getMethod() + " " + request.getRequestURI())
+            .metadata(Map.of(
+                "ip", request.getRemoteAddr(),
+                "status", response.getStatus(),
+                "user_agent", String.valueOf(request.getHeader("User-Agent"))
+            ))
+            .build());
+    }
+}
+```
+
+Register the interceptor:
+
+```java
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration
+public class WebConfig implements WebMvcConfigurer {
+
+    private final AuditInterceptor auditInterceptor;
+
+    public WebConfig(AuditInterceptor auditInterceptor) {
+        this.auditInterceptor = auditInterceptor;
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(auditInterceptor)
+            .addPathPatterns("/api/**");
+    }
+}
+```
+
+## Error Handling
+
+`log()` never throws. For `logDirect()` and `logBatchDirect()`, catch `AuditRailsException`:
+
+```java
+import io.auditrails.AuditRailsException;
+
+try {
+    audit.logDirect(AuditEvent.builder("user.login").actorId("user_123").build());
+} catch (AuditRailsException e) {
+    System.out.println(e.getStatusCode()); // 429
+    System.out.println(e.getCode());       // "rate/limit_exceeded"
+    System.out.println(e.getRequestId());  // "req_01HX..."
+    System.out.println(e.getDocUrl());     // "https://docs.auditrails.io/reference/error-codes"
+    System.out.println(e.isRetryable());   // false (true for 5xx)
+}
+```
+
+## Graceful Shutdown
+
+### try-with-resources
+
+`AuditRails` implements `AutoCloseable`, so you can use try-with-resources for automatic cleanup:
+
+```java
+try (AuditRails audit = AuditRails.builder("at_live_...").build()) {
+    audit.log(AuditEvent.builder("user.login").actorId("user_123").build());
+    // ... application code
+} // close() called automatically — flushes buffer, shuts down scheduler
+```
+
+### Spring Boot
+
+When registered as a Bean with `destroyMethod="close"`, Spring calls `close()` during application shutdown:
+
+```java
+@Bean(destroyMethod = "close")
+public AuditRails auditRails(@Value("${auditrails.api-key}") String apiKey) {
+    return AuditRails.builder(apiKey).build();
+}
+```
+
+### Manual Shutdown
+
+```java
+audit.close(); // flushes buffer, stops scheduler, waits up to 5s for completion
+```
+
+`close()` does the following in order:
+
+1. Marks the client as closed (future `log()` calls are silently ignored).
+2. Cancels the scheduled flush task and shuts down the `ScheduledExecutorService`.
+3. Waits up to 5 seconds for the scheduler to terminate.
+4. Flushes any remaining buffered events.
+
+## Zero Dependencies
+
+The Java SDK uses only standard library classes (`java.net.HttpURLConnection`, `java.util.concurrent`, `java.util.logging`). No external JARs are required.

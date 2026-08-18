@@ -1,0 +1,103 @@
+---
+title: Verify Hash Chain
+description: Verify the integrity of your project's cryptographic hash chain.
+api: GET /v1/events/verify
+---
+
+# Verify Hash Chain
+
+Verify the integrity of your project's hash chain over a range of chain sequence numbers. This endpoint recomputes hashes for each event and checks that `prev_hash` linkage is unbroken.
+
+If any event has been tampered with, the chain breaks and the response identifies where.
+
+## Query Parameters
+
+<ParamField query="from_seq" type="integer" default="1">
+  Starting chain sequence number (not a timestamp).
+</ParamField>
+
+<ParamField query="to_seq" type="integer">
+  Ending chain sequence number, inclusive (not a timestamp). Defaults to `from_seq + 1000` if omitted.
+</ParamField>
+
+## Response
+
+<ResponseField name="valid" type="boolean">
+  `true` if the hash chain is intact over the specified range.
+</ResponseField>
+
+<ResponseField name="checked" type="integer">
+  Number of events verified in the range.
+</ResponseField>
+
+<ResponseField name="first_seq" type="integer">
+  First chain sequence number checked.
+</ResponseField>
+
+<ResponseField name="last_seq" type="integer">
+  Last chain sequence number checked.
+</ResponseField>
+
+<ResponseField name="broken_at" type="integer">
+  Present only when `valid` is `false` — the chain sequence number where tampering was detected.
+</ResponseField>
+
+<ResponseField name="broken_hash" type="string">
+  Present only when `valid` is `false` — the stored hash of the broken entry.
+</ResponseField>
+
+<Note>
+There's no `request_id` in the response body for this endpoint — use the `X-Request-Id` response header for tracing.
+</Note>
+
+## Examples
+
+### curl
+
+```bash
+curl -G https://api.auditrails.io/v1/events/verify \
+  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -d "from_seq=1" \
+  -d "to_seq=5000"
+```
+
+### 200 OK — Chain Intact
+
+```json
+{
+  "valid": true,
+  "checked": 500,
+  "first_seq": 1,
+  "last_seq": 500
+}
+```
+
+### 200 OK — Tamper Detected
+
+```json
+{
+  "valid": false,
+  "checked": 42,
+  "first_seq": 1,
+  "last_seq": 42,
+  "broken_at": 42,
+  "broken_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+}
+```
+
+<Warning>
+A broken chain means at least one event has been modified after ingestion. This is a critical security finding. Export the verification result and investigate immediately.
+</Warning>
+
+## How Verification Works
+
+The verify endpoint performs two checks for each event in the range:
+
+1. **Hash recomputation** -- recomputes `SHA-256(prev_hash + canonical_payload + timestamp)` and compares it to the stored hash
+2. **Chain linkage** -- verifies that each event's `prev_hash` matches the preceding event's `hash`
+
+The canonical payload includes: `log_id`, `tenant_id`, `action`, `actor_id`, `resource`, and `metadata`. Worker-enriched fields (`country`, `city`, `ip_address`, and the chain fields themselves) are excluded from the hash computation.
+
+<Note>
+Verification is computationally intensive for large ranges — 1,000 sequences is the default and a reasonable page size. For a full-history check, page through with successive `from_seq`/`to_seq` ranges rather than requesting your entire chain at once.
+</Note>

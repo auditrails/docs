@@ -1,0 +1,123 @@
+---
+title: Hash Chain Verification
+description: How AuditRails cryptographic hash chaining works and how to verify log integrity.
+---
+
+# Hash Chain Verification
+
+Every audit event in AuditRails is cryptographically linked to the previous one, forming an **immutable chain**. This is how we guarantee tamper-proof logging.
+
+## How It Works
+
+Each event's hash is computed as:
+
+```
+hash = SHA-256(previous_hash + canonical_payload + timestamp_ms)
+```
+
+Where:
+- **`previous_hash`** — the hash of the preceding event in the chain (64 zeros for the first event)
+- **`canonical_payload`** — JSON of `{log_id, tenant_id, action, actor_id, resource, metadata}` (excludes worker-enriched fields)
+- **`timestamp_ms`** — millisecond-precision server timestamp
+
+### Chain Structure
+
+```
+Event 1: hash_1 = SHA-256("000...000" + payload_1 + ts_1)    ← genesis
+Event 2: hash_2 = SHA-256(hash_1 + payload_2 + ts_2)
+Event 3: hash_3 = SHA-256(hash_2 + payload_3 + ts_3)
+...
+```
+
+Each tenant has an **independent chain**. Tenant A's events never mix with Tenant B's chain.
+
+## Why This Matters
+
+**Without hash chaining**, someone with database access could:
+- Delete embarrassing log entries
+- Modify timestamps to create alibis
+- Insert fabricated events after the fact
+
+**With hash chaining**, any modification breaks the chain:
+- Change event 5 → its hash changes → event 6's `previous_hash` no longer matches → chain broken
+- Delete event 5 → event 6 points to a hash that doesn't exist → chain broken
+- Insert a fake event → the chain sequence breaks → immediately detectable
+
+## Verifying Chain Integrity
+
+### Via Dashboard
+
+1. Go to **Dashboard → Logs**
+2. Click any event to see its detail view
+3. The **chain navigation** shows prev/next events with hashes
+4. A broken chain is flagged with a warning indicator
+
+### Via API
+
+```bash
+curl https://api.auditrails.io/v1/events/verify \
+  -H "Authorization: Bearer at_live_..." \
+  -G -d "from=2024-01-01T00:00:00Z" -d "to=2024-01-31T23:59:59Z"
+```
+
+Response (healthy chain):
+```json
+{
+  "verified": true,
+  "events_checked": 15420,
+  "chain_start": "2024-01-01T00:00:01.234Z",
+  "chain_end": "2024-01-31T23:59:58.901Z"
+}
+```
+
+Response (broken chain):
+```json
+{
+  "verified": false,
+  "events_checked": 8234,
+  "first_broken": {
+    "log_id": "01HX...",
+    "chain_seq": 8235,
+    "expected_prev_hash": "a1b2c3...",
+    "actual_prev_hash": "d4e5f6...",
+    "timestamp": "2024-01-15T14:22:33.456Z"
+  }
+}
+```
+
+## Chain Storage
+
+Hash chain state is stored in two places for reliability:
+
+| Store | Purpose | Recovery |
+|-------|---------|----------|
+| **Redis** | Fast cache of latest hash per tenant | Rebuilt from Postgres on cache miss |
+| **Postgres** | Durable `chain_heads` table | Source of truth |
+
+The `chain_heads` table stores:
+- `tenant_id` — which tenant's chain
+- `last_hash` — the most recent hash value
+- `chain_seq` — sequence number (monotonically increasing)
+
+## What Happens If a Chain Breaks
+
+A broken chain is a serious event. It means either:
+
+1. **Data corruption** — a storage-level issue affected event data
+2. **Unauthorized modification** — someone altered log contents
+3. **System bug** — a software defect caused incorrect hash computation
+
+In all cases, the **break point is precisely identified** — you know exactly which event and when. This is critical for incident investigation and compliance audits.
+
+<Warning>
+AuditRails stores logs in S3 with Object Lock (WORM). Even if someone modifies the ClickHouse hot copy, the S3 cold copy remains untouched and can be used to verify and restore the original chain.
+</Warning>
+
+## For Auditors
+
+When reviewing AuditRails logs for a compliance audit:
+
+1. **Run chain verification** for the audit period — confirms no logs were tampered with
+2. **Check the verification result** — `verified: true` means the chain is intact
+3. **Export logs** — CSV export includes `chain_seq` and `hash` columns for independent verification
+4. **Verify independently** — you can recompute hashes from the exported data using the formula above

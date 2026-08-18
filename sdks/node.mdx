@@ -1,0 +1,201 @@
+---
+title: Node.js / TypeScript SDK
+description: Official AuditRails SDK for Node.js and TypeScript — native fetch, zero dependencies, fire-and-forget logging.
+---
+
+# Node.js / TypeScript SDK
+
+The `@auditrails/node` package provides a lightweight, zero-dependency client for logging audit events from any Node.js or TypeScript application. It uses the native `fetch` API (Node 18+) and buffers events in memory for automatic batch delivery.
+
+Source: [github.com/auditrails/auditrails-node](https://github.com/auditrails/auditrails-node)
+
+## Installation
+
+```bash
+npm install @auditrails/node
+```
+
+Requires **Node.js 18+** (for native `fetch`).
+
+## Initialization
+
+```typescript
+import { AuditRails } from '@auditrails/node';
+
+const audit = new AuditRails({
+  apiKey: process.env.AUDITRAILS_API_KEY, // required
+});
+```
+
+### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `apiKey` | `string` | **required** | Your API key (`at_live_...` or `at_test_...`) |
+| `baseUrl` | `string` | `https://api.auditrails.io` | API endpoint |
+| `batchSize` | `number` | `100` | Max events per batch (capped at 100) |
+| `flushInterval` | `number` | `1000` | Flush interval in milliseconds |
+| `maxRetries` | `number` | `3` | Retry attempts on 5xx errors |
+| `timeout` | `number` | `10000` | HTTP request timeout in milliseconds |
+| `autoShutdown` | `boolean` | `true` | Register process exit handlers |
+| `logger` | `Logger` | silent | Custom logger (debug/info/warn/error) |
+
+## Logging Events
+
+### Buffered (fire-and-forget)
+
+`log()` buffers the event and returns immediately. It never throws.
+
+```typescript
+audit.log({
+  action: 'user.login',
+  actorId: 'user_123',
+  resource: 'session/sess_abc',
+  metadata: { ip: '203.0.113.1', method: 'oauth2' },
+});
+```
+
+### Direct (awaitable)
+
+`logDirect()` sends immediately and returns the API response. It throws on errors.
+
+```typescript
+const response = await audit.logDirect({
+  action: 'document.deleted',
+  actorId: 'user_456',
+  resource: 'document/doc-789',
+});
+console.log(response.logId);    // "01HXYZ..."
+console.log(response.requestId); // "req_..."
+```
+
+### Batch Direct
+
+```typescript
+const response = await audit.logBatchDirect([
+  { action: 'user.login', actorId: 'user_1' },
+  { action: 'user.login', actorId: 'user_2' },
+]);
+console.log(response.logIds); // ["01HX...", "01HX..."]
+```
+
+## Express Middleware
+
+```typescript
+import express from 'express';
+import { AuditRails } from '@auditrails/node';
+
+const app = express();
+const audit = new AuditRails({ apiKey: process.env.AUDITRAILS_API_KEY });
+
+function auditMiddleware(action: string) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    res.on('finish', () => {
+      audit.log({
+        action,
+        actorId: req.user?.id,
+        resource: `${req.method} ${req.path}`,
+        metadata: {
+          ip: req.ip,
+          statusCode: res.statusCode,
+          userAgent: req.get('user-agent'),
+        },
+      });
+    });
+    next();
+  };
+}
+
+app.post('/api/documents', auditMiddleware('document.created'), (req, res) => {
+  // ... create document
+  res.json({ id: 'doc_123' });
+});
+```
+
+## Next.js Example
+
+```typescript
+// lib/audit.ts
+import { AuditRails } from '@auditrails/node';
+
+// Singleton — reused across requests in the same serverless instance
+export const audit = new AuditRails({
+  apiKey: process.env.AUDITRAILS_API_KEY,
+  autoShutdown: false, // serverless functions manage their own lifecycle
+});
+```
+
+```typescript
+// app/api/documents/route.ts
+import { NextResponse } from 'next/server';
+import { audit } from '@/lib/audit';
+
+export async function POST(request: Request) {
+  const body = await request.json();
+
+  // ... create document
+
+  audit.log({
+    action: 'document.created',
+    actorId: session.userId,
+    resource: `document/${doc.id}`,
+    metadata: { title: body.title },
+  });
+
+  return NextResponse.json({ id: doc.id });
+}
+```
+
+## Error Handling
+
+`log()` never throws. For `logDirect()` and `logBatchDirect()`, catch `AuditRailsError`:
+
+```typescript
+import { AuditRailsError, AuditRailsTimeoutError } from '@auditrails/node';
+
+try {
+  await audit.logDirect({ action: 'user.login', actorId: 'user_123' });
+} catch (err) {
+  if (err instanceof AuditRailsError) {
+    console.error('API error:', {
+      code: err.code,           // "rate/limit_exceeded"
+      statusCode: err.statusCode, // 429
+      requestId: err.requestId,   // "req_01HX..."
+      docUrl: err.docUrl,         // "https://docs.auditrails.io/reference/error-codes"
+      retryable: err.retryable,   // false (true for 5xx)
+    });
+  } else if (err instanceof AuditRailsTimeoutError) {
+    console.error('Request timed out');
+  }
+}
+```
+
+## Graceful Shutdown
+
+By default, the SDK registers handlers for `beforeExit`, `SIGTERM`, and `SIGINT` to flush remaining events. This is controlled by the `autoShutdown` option.
+
+```typescript
+// autoShutdown: true (default) — no manual shutdown needed
+
+// For manual control (e.g. serverless, tests):
+const audit = new AuditRails({
+  apiKey: 'at_live_...',
+  autoShutdown: false,
+});
+
+// Flush before exit
+await audit.close(); // flushes buffer, stops timer, removes handlers
+```
+
+The flush timer uses `unref()` so it does not keep the Node.js process alive.
+
+## Custom Logger
+
+Pass any object with `debug`, `info`, `warn`, and `error` methods:
+
+```typescript
+const audit = new AuditRails({
+  apiKey: 'at_live_...',
+  logger: console, // or pino, winston, etc.
+});
+```

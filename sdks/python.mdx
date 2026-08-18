@@ -1,0 +1,274 @@
+---
+title: Python SDK
+description: Official AuditRails SDK for Python — sync and async clients, background thread batching, zero required dependencies.
+---
+
+# Python SDK
+
+The `auditrails` package provides both synchronous and async clients for logging audit events from any Python application. The sync client uses `urllib` (zero dependencies) with a background thread for batching. The async client uses `httpx` (optional dependency).
+
+Source: [github.com/auditrails/auditrails-python](https://github.com/auditrails/auditrails-python)
+
+## Installation
+
+<CodeGroup>
+
+```bash sync
+pip install auditrails
+```
+
+```bash async
+pip install auditrails[async]
+```
+
+</CodeGroup>
+
+Requires **Python 3.9+**. The `[async]` extra installs `httpx` for the `AsyncAuditRails` client.
+
+## Initialization
+
+<CodeGroup>
+
+```python Sync
+from auditrails import AuditRails, Config
+
+audit = AuditRails(Config(api_key="at_live_..."))
+```
+
+```python Async
+from auditrails import AsyncAuditRails, Config
+
+audit = AsyncAuditRails(Config(api_key="at_live_..."))
+await audit.start()  # starts background flush task + httpx client
+```
+
+</CodeGroup>
+
+### Config Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `api_key` | `str` | **required** | Your API key (`at_live_...` or `at_test_...`) |
+| `base_url` | `str` | `https://api.auditrails.io` | API endpoint |
+| `batch_size` | `int` | `100` | Max events per batch (capped at 100) |
+| `flush_interval` | `float` | `1.0` | Auto-flush interval in seconds |
+| `max_retries` | `int` | `3` | Retry attempts on 5xx errors |
+| `timeout` | `float` | `10.0` | HTTP request timeout in seconds |
+
+## Logging Events
+
+### Buffered (fire-and-forget)
+
+`log()` buffers the event and returns immediately. It never raises.
+
+```python
+from auditrails import AuditEvent
+
+audit.log(AuditEvent(
+    action="user.login",
+    actor_id="user_123",
+    resource="session/sess_abc",
+    metadata={"ip": "203.0.113.1", "method": "oauth2"},
+))
+```
+
+### Direct (synchronous / awaitable)
+
+`log_direct()` sends immediately and returns the response. It raises on errors.
+
+<CodeGroup>
+
+```python Sync
+response = audit.log_direct(AuditEvent(
+    action="document.deleted",
+    actor_id="user_456",
+    resource="document/doc-789",
+))
+print(response.log_id)      # "01HXYZ..."
+print(response.request_id)  # "req_..."
+```
+
+```python Async
+response = await audit.log_direct(AuditEvent(
+    action="document.deleted",
+    actor_id="user_456",
+    resource="document/doc-789",
+))
+print(response.log_id)      # "01HXYZ..."
+print(response.request_id)  # "req_..."
+```
+
+</CodeGroup>
+
+### Batch Direct
+
+```python
+response = audit.log_batch_direct([
+    AuditEvent(action="user.login", actor_id="user_1"),
+    AuditEvent(action="user.login", actor_id="user_2"),
+])
+print(response.log_ids)  # ["01HX...", "01HX..."]
+```
+
+## Django Integration
+
+### Settings Singleton
+
+```python
+# myapp/audit.py
+from auditrails import AuditRails, Config
+from django.conf import settings
+
+audit = AuditRails(Config(api_key=settings.AUDITRAILS_API_KEY))
+```
+
+```python
+# settings.py
+AUDITRAILS_API_KEY = env("AUDITRAILS_API_KEY")
+```
+
+### Django Middleware
+
+```python
+# myapp/middleware.py
+from myapp.audit import audit
+from auditrails import AuditEvent
+
+class AuditMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+
+        audit.log(AuditEvent(
+            action=f"{request.method.lower()}.{request.resolver_match.url_name}",
+            actor_id=str(request.user.id) if request.user.is_authenticated else None,
+            resource=f"{request.method} {request.path}",
+            metadata={
+                "ip": request.META.get("REMOTE_ADDR"),
+                "status": response.status_code,
+            },
+        ))
+
+        return response
+```
+
+```python
+# settings.py
+MIDDLEWARE = [
+    # ...
+    "myapp.middleware.AuditMiddleware",
+]
+```
+
+### Decorator Pattern
+
+```python
+# myapp/decorators.py
+import functools
+from myapp.audit import audit
+from auditrails import AuditEvent
+
+def audit_action(action: str):
+    def decorator(view_func):
+        @functools.wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            response = view_func(request, *args, **kwargs)
+            audit.log(AuditEvent(
+                action=action,
+                actor_id=str(request.user.id) if request.user.is_authenticated else None,
+                resource=request.path,
+            ))
+            return response
+        return wrapper
+    return decorator
+```
+
+```python
+# views.py
+@audit_action("document.created")
+def create_document(request):
+    # ...
+```
+
+## FastAPI Integration
+
+Use the async client with FastAPI's lifespan:
+
+```python
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
+from auditrails import AsyncAuditRails, AuditEvent, Config
+
+audit = AsyncAuditRails(Config(api_key="at_live_..."))
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await audit.start()
+    yield
+    await audit.close()
+
+app = FastAPI(lifespan=lifespan)
+
+@app.post("/documents")
+async def create_document(request: Request):
+    # ... create document
+
+    audit.log(AuditEvent(
+        action="document.created",
+        actor_id=request.state.user_id,
+        resource=f"document/{doc.id}",
+    ))
+
+    return {"id": doc.id}
+```
+
+## Error Handling
+
+`log()` never raises. For `log_direct()` and `log_batch_direct()`, catch `AuditRailsError`:
+
+```python
+from auditrails import AuditRailsError, AuditRailsTimeoutError
+
+try:
+    audit.log_direct(AuditEvent(action="user.login", actor_id="user_123"))
+except AuditRailsError as e:
+    print(e.status_code)  # 429
+    print(e.code)         # "rate/limit_exceeded"
+    print(e.request_id)   # "req_01HX..."
+    print(e.doc_url)      # "https://docs.auditrails.io/reference/error-codes"
+    print(e.retryable)    # False (True for 5xx)
+except AuditRailsTimeoutError as e:
+    print(f"Timed out after {e.timeout}s")
+```
+
+## Background Thread Batching
+
+The sync `AuditRails` client runs a daemon background thread that wakes up every `flush_interval` seconds (default: 1s) and sends all buffered events as a batch. The thread is:
+
+- **Daemon**: it does not prevent process exit.
+- **Thread-safe**: `log()` uses a lock for buffer access.
+- **Auto-registered**: `atexit.register(self.close)` ensures a final flush before the process exits.
+
+If the buffer fills to `batch_size` before the interval, the thread is signaled to flush immediately.
+
+## Graceful Shutdown
+
+The sync client registers an `atexit` handler automatically. For the async client, call `close()` explicitly:
+
+<CodeGroup>
+
+```python Sync
+# Automatic — atexit handler flushes on process exit
+
+# For manual control:
+audit.close()  # flushes buffer, stops background thread
+```
+
+```python Async
+# Must be called explicitly:
+await audit.close()  # flushes buffer, cancels flush task, closes httpx client
+```
+
+</CodeGroup>

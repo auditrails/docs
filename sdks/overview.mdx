@@ -1,0 +1,65 @@
+---
+title: SDK Overview
+description: Official AuditRails SDKs for 5 languages — same API contract, zero dependencies, fire-and-forget logging.
+---
+
+# SDK Overview
+
+AuditRails provides official SDKs for the 5 most popular backend languages. All SDKs implement the same API contract.
+
+## Available SDKs
+
+| Language | Package | Install | Repo |
+|----------|---------|---------|------|
+| [Node.js / TypeScript](/sdks/node) | `@auditrails/node` | `npm install @auditrails/node` | [GitHub](https://github.com/auditrails/auditrails-node) |
+| [PHP](/sdks/php) | `auditrails/auditrails-php` | `composer require auditrails/auditrails-php` | [GitHub](https://github.com/auditrails/auditrails-php) |
+| [Python](/sdks/python) | `auditrails` | `pip install auditrails` | [GitHub](https://github.com/auditrails/auditrails-python) |
+| [Go](/sdks/go) | `auditrails-go` | `go get github.com/auditrails/auditrails-go` | [GitHub](https://github.com/auditrails/auditrails-go) |
+| [Java](/sdks/java) | `io.auditrails:auditrails-java` | Maven / Gradle | [GitHub](https://github.com/auditrails/auditrails-java) |
+
+## Shared Behavior
+
+Every SDK implements these guarantees:
+
+1. **`log()` never throws** — events are buffered and sent in the background. Your app is never disrupted.
+2. **Automatic batching** — events are batched (up to 100 per request) and flushed every second.
+3. **Retry with backoff** — 5xx errors are retried with exponential backoff (200ms → 400ms → 800ms).
+4. **Graceful shutdown** — buffered events are flushed on process exit.
+5. **Zero/minimal dependencies** — SDKs use stdlib HTTP clients (Node: `fetch`, Python: `urllib`, Go: `net/http`, Java: `HttpURLConnection`). PHP requires a PSR-18 HTTP client.
+
+## Configuration Options
+
+All SDKs accept the same options:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `apiKey` | **required** | Your API key (`at_live_...` or `at_test_...`) |
+| `baseUrl` | `https://api.auditrails.io` | API endpoint |
+| `batchSize` | `100` | Max events per batch |
+| `flushInterval` | `1 second` | How often to flush buffered events |
+| `maxRetries` | `3` | Retry attempts on 5xx errors |
+| `timeout` | `10 seconds` | HTTP request timeout |
+
+## Methods
+
+| Method | Behavior | Throws? |
+|--------|----------|---------|
+| `log(event)` | Buffer event, send in background | **Never** |
+| `logDirect(event)` | Send immediately, return response | **Yes** |
+| `logBatchDirect(events)` | Send batch immediately | **Yes** |
+| `flush()` | Flush all buffered events | No |
+| `close()` | Flush + shut down | No |
+
+## Event Schema
+
+```json
+{
+  "action": "user.login",       // Required: what happened
+  "actor_id": "user_123",       // Optional: who did it
+  "resource": "session/sess_1", // Optional: what was affected
+  "metadata": {                 // Optional: additional context
+    "ip": "203.0.113.1",
+    "method": "oauth2"
+  }
+}
+```

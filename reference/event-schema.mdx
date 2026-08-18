@@ -1,0 +1,106 @@
+---
+title: Event Schema
+description: Complete field reference for AuditRails audit events.
+---
+
+# Event Schema
+
+## Input Fields (SDK / API)
+
+These fields are provided by your application when logging an event.
+
+| Field | Type | Required | Max Length | Description |
+|-------|------|----------|-----------|-------------|
+| `action` | string | **Yes** | 255 chars | What happened. Use `resource.verb` format. Must be in the compliance action catalog or a custom action. |
+| `actor_id` | string | No | 255 chars | Who performed the action. Use internal IDs, not PII. |
+| `resource` | string | No | 255 chars | What was affected. Use `type/id` format. |
+| `metadata` | object | No | none enforced | Additional context as key-value pairs — see Metadata below. |
+
+### Action Naming Convention
+
+Use dot-separated `resource.verb` format:
+
+```
+user.login          user.logout         user.created        user.deleted
+document.created    document.updated    document.deleted    document.shared
+api_key.created     api_key.revoked
+payment.processed   payment.refunded    payment.failed
+permission.granted  permission.revoked
+config.changed      deploy.completed
+```
+
+### Metadata
+
+`metadata` accepts arbitrary JSON — strings, numbers, booleans, nested objects, and arrays. There is currently no server-side enforcement of key count or value size beyond the overall request body limit (256KB for a single event, 2MB for a batch of up to 100). Keep it reasonably small anyway: it's stored and returned on every read of this event.
+
+## Enriched Fields (Added by AuditRails)
+
+These fields are added automatically during processing. They appear in API responses and exports. All are optional in the response (omitted when empty, except the always-present ones noted).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `log_id` | string | ULID — globally unique, time-sortable identifier. Always present. |
+| `tenant_id` | string | UUID of the organization. Always present. |
+| `project_id` | string | UUID of the project (from API key). Always present. |
+| `schema_version` | integer | Internal event schema version. |
+| `actor_type` | string | Type of actor, when set (e.g., `user`, `system`). |
+| `resource_type` | string | Type of resource, when set. |
+| `category` | string | Category from the compliance action catalog, when set. |
+| `severity` | string | Severity, when set. |
+| `session_id` | string | Session identifier, when set. |
+| `ts_client` | string | Client-supplied timestamp, when set — distinct from `timestamp`. |
+| `timestamp` | string | ISO 8601 server timestamp (UTC, millisecond precision) when the event was received. Always present. |
+| `ip_address` | string | Source IP address of the API request. |
+| `country` | string | 2-letter country code from geo-IP lookup. |
+| `city` | string | City name from geo-IP lookup. |
+
+## Chain Fields (Added by Hash Chain Engine)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `chain_seq` | integer | Monotonically increasing sequence number within the project's chain. |
+| `hash` | string | SHA-256 hash of this event (64 hex characters). |
+| `prev_hash` | string | Hash of the previous event in the chain. |
+
+Chain fields — along with `country`/`city`/`ip_address` and the rest of the enriched fields — are excluded from the hash computation itself. The canonical payload hashed is `log_id`, `tenant_id`, `action`, `actor_id`, `resource`, and `metadata`. See [Verify Hash Chain](/api-reference/verify-chain) for details.
+
+## Example: Complete Event
+
+Input (what you send):
+```json
+{
+  "action": "document.shared",
+  "actor_id": "user_123",
+  "resource": "document/doc-456",
+  "metadata": {
+    "shared_with": "team_engineering",
+    "permission": "read",
+    "expires_in": "7d"
+  }
+}
+```
+
+Stored (what AuditRails records, and what a `GET /v1/events/{log_id}` response looks like):
+```json
+{
+  "log_id": "01HXA1B2C3D4E5F6G7H8J9K0",
+  "tenant_id": "019cc9ce-7981-7316-bf99-1f7e43364f2f",
+  "project_id": "019cc9ce-8a12-7456-bf99-2g8h54475g3g",
+  "schema_version": 1,
+  "action": "document.shared",
+  "actor_id": "user_123",
+  "resource": "document/doc-456",
+  "metadata": {
+    "shared_with": "team_engineering",
+    "permission": "read",
+    "expires_in": "7d"
+  },
+  "timestamp": "2024-03-13T14:22:33.456Z",
+  "ip_address": "203.0.113.45",
+  "country": "US",
+  "city": "San Francisco",
+  "chain_seq": 15421,
+  "hash": "a1b2c3d4e5f6...64 hex chars",
+  "prev_hash": "f6e5d4c3b2a1...64 hex chars"
+}
+```

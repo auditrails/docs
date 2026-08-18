@@ -1,0 +1,110 @@
+---
+title: List Action Catalog
+description: Retrieve the compliance action catalog, optionally scoped to your organization's active frameworks.
+api: GET /v1/actions
+---
+
+# List Action Catalog
+
+Returns every action in the compliance action catalog, grouped by action name with the framework(s) each one belongs to. This is the canonical list of valid `action` values for [`POST /v1/events`](/api-reference/post-events).
+
+This is also the endpoint linked from `action/invalid` error responses' `valid_actions_url` field — if you get that error, this is where to look.
+
+## Authentication
+
+This endpoint works both **unauthenticated** and **authenticated**:
+
+- **Unauthenticated** (no `Authorization` header, or an invalid one): returns the full catalog, no `subscribed` field.
+- **Authenticated** (valid `Authorization: Bearer <api_key>`): returns the catalog filtered to your organization's active framework(s), with a `subscribed` boolean per action.
+
+## Response
+
+<ResponseField name="actions" type="array">
+  Array of grouped actions.
+
+  <Expandable title="Action object">
+    <ResponseField name="action" type="string">
+      The action name (e.g., `aiact.model_inference_logged`).
+    </ResponseField>
+
+    <ResponseField name="category" type="string">
+      Category grouping, when set.
+    </ResponseField>
+
+    <ResponseField name="description" type="string">
+      Human-readable description of what this action logs.
+    </ResponseField>
+
+    <ResponseField name="frameworks" type="array">
+      Frameworks this action belongs to.
+
+      <Expandable title="Framework reference">
+        <ResponseField name="framework" type="string">
+          Internal framework key (e.g., `eu_ai_act`).
+        </ResponseField>
+
+        <ResponseField name="label" type="string">
+          Display label (e.g., `EU AI Act`).
+        </ResponseField>
+
+        <ResponseField name="is_required" type="boolean">
+          Whether this action is a required (vs. optional) event for this framework.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="required_fields" type="array">
+      Metadata field names required for this action (validated on `POST /v1/events` — returns `action/missing_required_fields` if absent).
+    </ResponseField>
+
+    <ResponseField name="optional_fields" type="array">
+      Metadata field names commonly used for this action but not required.
+    </ResponseField>
+
+    <ResponseField name="subscribed" type="boolean">
+      Only present on authenticated requests — whether this action is usable given your organization's currently active framework(s).
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="total" type="integer">
+  Number of actions returned.
+</ResponseField>
+
+## Examples
+
+### curl (unauthenticated — full catalog)
+
+```bash
+curl https://api.auditrails.io/v1/actions
+```
+
+### curl (authenticated — filtered to your frameworks)
+
+```bash
+curl https://api.auditrails.io/v1/actions \
+  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+### 200 OK
+
+```json
+{
+  "actions": [
+    {
+      "action": "aiact.model_inference_logged",
+      "category": "ai_act",
+      "description": "Log a single model inference for EU AI Act Article 12 record-keeping.",
+      "frameworks": [
+        { "framework": "eu_ai_act", "label": "EU AI Act", "is_required": true }
+      ],
+      "required_fields": ["system_id", "model_id"],
+      "optional_fields": ["input_hash", "output_hash", "latency_ms", "risk_tier"],
+      "subscribed": true
+    }
+  ],
+  "total": 1
+}
+```
+
+This endpoint has no dedicated rate limit beyond the standard [per-IP limit](/api-reference/rate-limits) and, for authenticated requests, your plan's per-second limit.

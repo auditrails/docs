@@ -1,0 +1,135 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "AuditRails",
+  "logo": {
+    "dark": "/images/logo-dark.png",
+    "light": "/images/logo-light.png"
+  },
+  "favicon": "/images/favicon.ico",
+  "colors": {
+    "primary": "#3366FF",
+    "light": "#5588FF",
+    "dark": "#2255DD"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Dashboard",
+        "href": "https://app.auditrails.io"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Get Started Free",
+      "href": "https://app.auditrails.io/register"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "concepts",
+              "authentication"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/compliance-mapping",
+              "guides/hash-chain-verification",
+              "guides/data-retention",
+              "guides/gdpr-compliance"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/error-codes",
+              "reference/rate-limits",
+              "reference/event-schema"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Ingestion API",
+            "pages": [
+              "api-reference/overview",
+              "api-reference/authentication",
+              "api-reference/post-events",
+              "api-reference/post-events-batch",
+              "api-reference/rate-limits"
+            ]
+          },
+          {
+            "group": "Read API",
+            "pages": [
+              "api-reference/get-events",
+              "api-reference/get-event",
+              "api-reference/verify-chain",
+              "api-reference/actions"
+            ]
+          },
+          {
+            "group": "DSAR API",
+            "pages": [
+              "api-reference/dsar-export",
+              "api-reference/dsar-delete"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "SDKs",
+        "groups": [
+          {
+            "group": "SDKs",
+            "pages": [
+              "sdks/overview",
+              "sdks/node",
+              "sdks/php",
+              "sdks/python",
+              "sdks/go",
+              "sdks/java"
+            ]
+          }
+        ]
+      }
+    ],
+    "anchors": [
+      {
+        "anchor": "Status",
+        "icon": "signal",
+        "href": "https://status.auditrails.io"
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/auditrails",
+      "linkedin": "https://linkedin.com/company/auditrails"
+    }
+  },
+  "integrations": {
+    "plausible": {
+      "domain": "docs.auditrails.io"
+    }
+  },
+  "api": {
+    "baseUrl": "https://api.auditrails.io",
+    "auth": {
+      "method": "bearer",
+      "name": "Authorization"
+    }
+  }
+}

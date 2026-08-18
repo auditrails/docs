@@ -1,0 +1,140 @@
+---
+title: Log Single Event
+description: Log a single audit event to AuditRails.
+api: POST /v1/events
+---
+
+# Log Single Event
+
+Log a single audit event. The event is hash-chained, stored in WORM storage, and indexed for search.
+
+## Request Headers
+
+<ParamField header="Idempotency-Key" type="string">
+  Optional client-generated key for safe retries. Reusing the same key with an
+  identical request body replays the original response verbatim (with an
+  `Idempotency-Replayed: true` response header) instead of creating a
+  duplicate event. Reusing it with a *different* body returns `409 Conflict`.
+</ParamField>
+
+## Request Body
+
+<ParamField body="action" type="string" required>
+  What happened. Must be present in the compliance action catalog of one of
+  your organization's active frameworks, or a custom action you've defined
+  yourself (self-service on every plan). See [`GET /v1/actions`](/api-reference/actions)
+  for the live catalog. Use `resource.verb` format (e.g., `user.login`, `document.deleted`).
+  Maximum 255 characters.
+</ParamField>
+
+<ParamField body="actor_id" type="string">
+  Who performed the action. Typically a user ID (e.g., `user_123`, `system`).
+  Maximum 255 characters.
+</ParamField>
+
+<ParamField body="resource" type="string">
+  What was affected. Use `type/id` format (e.g., `document/doc-456`, `invoice/inv-789`).
+  Maximum 255 characters.
+</ParamField>
+
+<ParamField body="metadata" type="object">
+  Additional context as key-value pairs. Not currently size- or key-count-limited
+  server-side beyond the overall request body limit (256KB) — keep it reasonably
+  small since it's stored and returned on every read of this event.
+</ParamField>
+
+## Response
+
+<ResponseField name="log_id" type="string">
+  Unique identifier for the event (ULID format).
+</ResponseField>
+
+<ResponseField name="request_id" type="string">
+  Unique request identifier for tracing.
+</ResponseField>
+
+## Examples
+
+### curl
+
+```bash
+curl -X POST https://api.auditrails.io/v1/events \
+  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "user.login",
+    "actor_id": "user_123",
+    "resource": "session/sess_abc",
+    "metadata": {
+      "ip": "203.0.113.1",
+      "method": "password"
+    }
+  }'
+```
+
+### 202 Accepted
+
+```json
+{
+  "log_id": "01HX7YGBFZ3QK8N9VMJT5RPCE4",
+  "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7"
+}
+```
+
+## Error Responses
+
+Every error uses the same envelope — see [Error Codes](/reference/error-codes) for the full list. A few examples relevant to this endpoint:
+
+### 422 Unprocessable Entity — Missing Required Field
+
+```json
+{
+  "error": {
+    "code": "validation/missing_action",
+    "message": "The 'action' field is required.",
+    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```
+
+### 401 Unauthorized
+
+```json
+{
+  "error": {
+    "code": "auth/key_not_found",
+    "message": "API key not found. Verify the key is correct or generate a new one in the dashboard.",
+    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```
+
+### 409 Conflict — Idempotency Key Reused
+
+```json
+{
+  "error": {
+    "code": "event/idempotency_key_conflict",
+    "message": "This Idempotency-Key was already used with a different request body.",
+    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```
+
+### 429 Too Many Requests
+
+```json
+{
+  "error": {
+    "code": "rate/limit_exceeded",
+    "message": "Rate limit exceeded. Please retry after the duration specified in the Retry-After header.",
+    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```
+
+The response includes a `Retry-After` header indicating how many seconds to wait. See [Rate Limits](/api-reference/rate-limits) for the full picture — plan limits, the separate test-key pool, and the per-IP limit.

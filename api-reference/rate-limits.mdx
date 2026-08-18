@@ -1,0 +1,101 @@
+---
+title: Rate Limits
+description: Per-plan rate limits, response headers, and handling 429 errors.
+---
+
+# Rate Limits
+
+AuditRails enforces rate limits using a **fixed-window** algorithm (one window per second). There are three independent limits, checked in this order:
+
+## 1. Per-IP Limit
+
+Applied to every request, before authentication, regardless of API key: **100 req/s per source IP**. Returns `rate/ip_limit_exceeded` when exceeded.
+
+## 2. Per-Plan Limit (live keys)
+
+Applied per organization, based on your subscription plan:
+
+| Plan | Requests/sec |
+|------|-------------|
+| **Starter Trails** | 1,000 |
+| **Framework Trails** | 1,000 |
+| **Compliance Trails** | 1,000 |
+
+Check the dashboard's Billing page for your exact current limit — it's admin-configurable and may not match this table for every tenant. Returns `rate/limit_exceeded` when exceeded.
+
+<Info>
+Batch requests (`POST /v1/events/batch`) count as **one request** regardless of how many events are in the batch (up to 100). Use batch ingestion to maximize throughput.
+</Info>
+
+## 3. Test-Key Limit
+
+`at_test_…` keys draw from their own separate, plan-independent pool — **60 req/s by default** — instead of the per-plan limit above. Returns `rate/test_limit_exceeded` when exceeded. Never use a test key for production load or a load test.
+
+## No Rate-Limit Headers on Success
+
+Unlike some APIs, AuditRails does **not** return `X-RateLimit-Limit`/`X-RateLimit-Remaining`/`X-RateLimit-Reset` headers on successful responses. The only rate-limit-related header is `Retry-After`, and it's only present on `429` responses.
+
+## 429 Too Many Requests
+
+When you exceed any of the three limits above, the API returns a `429` status code with a `Retry-After` header:
+
+### Response Headers
+
+```
+Retry-After: 1
+```
+
+### Response Body
+
+```json
+{
+  "error": {
+    "code": "rate/limit_exceeded",
+    "message": "Starter Trails plan: 1000 req/s limit exceeded. Retry after the Retry-After duration.",
+    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```
+
+`code` will be `rate/ip_limit_exceeded` or `rate/test_limit_exceeded` instead, depending on which limit was hit — see [Error Codes](/reference/error-codes).
+
+## Handling Rate Limits
+
+### Recommended Strategy
+
+1. **Respect `Retry-After`** -- wait the specified number of seconds before retrying
+2. **Use exponential backoff** -- if retries continue to fail, increase the wait time
+3. **Use batch ingestion** -- `POST /v1/events/batch` sends up to 100 events in a single request
+4. **Use a live key for anything beyond light testing** -- test keys share a much smaller pool than your plan's live limit
+
+### SDK Behavior
+
+All official SDKs handle rate limits automatically:
+
+- Automatic retry with exponential backoff
+- Configurable retry count (default: 3 retries)
+- Background batching to minimize request count
+
+### Example: Manual Retry with Backoff
+
+```bash
+# If you get a 429, wait and retry
+curl -X POST https://api.auditrails.io/v1/events \
+  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "user.login", "actor_id": "user_123"}'
+
+# Response: 429 with Retry-After: 1
+# Wait 1 second, then retry
+sleep 1
+
+curl -X POST https://api.auditrails.io/v1/events \
+  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "user.login", "actor_id": "user_123"}'
+```
+
+## Need Higher Limits?
+
+For higher throughput requirements, [contact sales](https://auditrails.io/contact) to discuss custom limits.

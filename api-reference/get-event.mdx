@@ -1,0 +1,160 @@
+---
+title: Get Event
+description: Retrieve a single audit event with full hash chain details.
+api: GET /v1/events/{log_id}
+---
+
+# Get Event
+
+Retrieve a single audit event by its `log_id`, including hash chain information for verification.
+
+## Path Parameters
+
+<ParamField path="log_id" type="string" required>
+  The unique event identifier (ULID format, e.g., `01HX7YGBFZ3QK8N9VMJT5RPCE4`).
+</ParamField>
+
+## Response
+
+<ResponseField name="log_id" type="string">
+  Unique event identifier (ULID format).
+</ResponseField>
+
+<ResponseField name="tenant_id" type="string">
+  Your organization's ID.
+</ResponseField>
+
+<ResponseField name="project_id" type="string">
+  The project this event belongs to.
+</ResponseField>
+
+<ResponseField name="schema_version" type="integer">
+  Internal event schema version.
+</ResponseField>
+
+<ResponseField name="action" type="string">
+  The action that was performed.
+</ResponseField>
+
+<ResponseField name="actor_id" type="string">
+  Who performed the action.
+</ResponseField>
+
+<ResponseField name="actor_type" type="string">
+  Type of actor, when set.
+</ResponseField>
+
+<ResponseField name="resource" type="string">
+  What was affected.
+</ResponseField>
+
+<ResponseField name="resource_type" type="string">
+  Type of resource, when set.
+</ResponseField>
+
+<ResponseField name="category" type="string">
+  Category, when set (from the compliance action catalog).
+</ResponseField>
+
+<ResponseField name="severity" type="string">
+  Severity, when set.
+</ResponseField>
+
+<ResponseField name="session_id" type="string">
+  Session identifier, when set.
+</ResponseField>
+
+<ResponseField name="ts_client" type="string">
+  Client-supplied timestamp, when set — distinct from `timestamp` below, which is always server-assigned.
+</ResponseField>
+
+<ResponseField name="metadata" type="object">
+  Additional context key-value pairs.
+</ResponseField>
+
+<ResponseField name="timestamp" type="string">
+  Server timestamp when the event was received (ISO 8601).
+</ResponseField>
+
+<ResponseField name="ip_address" type="string">
+  Source IP address of the original API request.
+</ResponseField>
+
+<ResponseField name="country" type="string">
+  Country code derived from source IP.
+</ResponseField>
+
+<ResponseField name="city" type="string">
+  City derived from source IP.
+</ResponseField>
+
+<ResponseField name="chain_seq" type="integer">
+  Position in the project's hash chain (1-indexed).
+</ResponseField>
+
+<ResponseField name="prev_hash" type="string">
+  SHA-256 hash of the previous event in the chain. The first event in a chain has a genesis hash of 64 zeros.
+</ResponseField>
+
+<ResponseField name="hash" type="string">
+  SHA-256 hash of this event, computed as `SHA-256(prev_hash + canonical_payload + timestamp)`.
+</ResponseField>
+
+<Note>
+There's no `request_id` in the response body for this endpoint — use the `X-Request-Id` response header for tracing.
+</Note>
+
+## Examples
+
+### curl
+
+```bash
+curl https://api.auditrails.io/v1/events/01HX7YGBFZ3QK8N9VMJT5RPCE4 \
+  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+### 200 OK
+
+```json
+{
+  "log_id": "01HX7YGBFZ3QK8N9VMJT5RPCE4",
+  "tenant_id": "org_abc123",
+  "project_id": "proj_def456",
+  "schema_version": 1,
+  "action": "user.login",
+  "actor_id": "user_123",
+  "resource": "session/sess_abc",
+  "metadata": {
+    "ip": "203.0.113.1",
+    "method": "password"
+  },
+  "timestamp": "2025-01-15T10:30:00.123Z",
+  "ip_address": "203.0.113.1",
+  "country": "US",
+  "city": "San Francisco",
+  "chain_seq": 4271,
+  "prev_hash": "a1b2c3d4e5f6789012345678abcdef0123456789abcdef0123456789abcdef01",
+  "hash": "f9e8d7c6b5a4321098765432fedcba9876543210fedcba9876543210fedcba98"
+}
+```
+
+## Error Responses
+
+Every error uses the same envelope — see [Error Codes](/reference/error-codes) for the full list.
+
+### 404 Not Found
+
+```json
+{
+  "error": {
+    "code": "read/not_found",
+    "message": "Event not found.",
+    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```
+
+<Note>
+Events are project-scoped. You can only retrieve events that belong to the project associated with your API key. Requesting an event from another project returns a 404, not a 403, to prevent information leakage.
+</Note>

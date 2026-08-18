@@ -1,0 +1,44 @@
+---
+title: DSAR Export
+description: Export all audit data for a specific actor to fulfill data subject access requests.
+---
+
+# DSAR Export
+
+<Warning>
+This is a **dashboard-only** feature, not a Bearer-token API endpoint. There is no `POST /v1/dsar/export` on the ingestion API — DSAR requests are submitted through the AuditRails dashboard and authenticated by your logged-in session, not an `at_live_…`/`at_test_…` API key. This page describes the real flow.
+</Warning>
+
+Export all audit events associated with a specific actor to fulfill a data subject access request (GDPR Article 15 and similar).
+
+## How to Submit a Request
+
+1. Sign in to the [AuditRails dashboard](https://app.auditrails.io) as an organization admin
+2. Go to **Settings → DSAR**
+3. Fill in the request form:
+   - **Actor ID** — must exactly match the `actor_id` used when logging events for this person
+   - **Type** — choose **Export**
+   - **Requester email** — who to notify when it's ready
+   - **Reason** — optional, free text
+4. Submit — the request is queued and processed asynchronously
+
+Only one active export request per `actor_id` can exist at a time; submitting a duplicate while one is pending or processing is rejected with a validation error on the form.
+
+## Status
+
+Each request has a status visible in the DSAR request history on the same page: `pending`, `processing`, `complete`, or `failed`.
+
+## How It Works
+
+1. You submit a DSAR export request with the actor ID, from the dashboard
+2. AuditRails scans both hot storage (ClickHouse) and cold storage (S3/Cassandra) for all events where `actor_id` matches, across the full retention period for your plan
+3. The results are compiled into a downloadable export file
+4. Once `complete`, a **Download** link appears next to the request in the DSAR history table
+
+<Info>
+Events in WORM storage are read-only copies used for the export — the originals remain untouched.
+</Info>
+
+## Access Control
+
+Only organization admins can submit or view DSAR requests (`Gate::authorize('manage', $organization)` on the Laravel side) — this is intentionally more restrictive than regular API key access, since DSAR requests handle personal data subject to compliance obligations.

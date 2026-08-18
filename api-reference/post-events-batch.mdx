@@ -1,0 +1,162 @@
+---
+title: Log Batch Events
+description: Log up to 100 audit events in a single request.
+api: POST /v1/events/batch
+---
+
+# Log Batch Events
+
+Log up to 100 audit events in a single request. Each event is individually hash-chained and stored. Use batch ingestion for high-throughput scenarios to reduce HTTP overhead.
+
+## Request Headers
+
+<ParamField header="Idempotency-Key" type="string">
+  Optional client-generated key for safe retries, applied to the whole batch —
+  see the [single event endpoint's](/api-reference/post-events) Idempotency-Key
+  docs for the exact semantics.
+</ParamField>
+
+## Request Body
+
+<ParamField body="events" type="array" required>
+  Array of event objects. Minimum 1, maximum 100 events per request.
+
+  Each event object accepts the same fields as the [single event endpoint](/api-reference/post-events):
+
+  <Expandable title="Event object">
+    <ParamField body="action" type="string" required>
+      What happened. Must be present in the compliance action catalog or a
+      custom action. Use `resource.verb` format (e.g., `user.login`, `document.deleted`).
+      Maximum 255 characters.
+    </ParamField>
+
+    <ParamField body="actor_id" type="string">
+      Who performed the action. Maximum 255 characters.
+    </ParamField>
+
+    <ParamField body="resource" type="string">
+      What was affected. Maximum 255 characters.
+    </ParamField>
+
+    <ParamField body="metadata" type="object">
+      Additional context as key-value pairs. Not currently size- or
+      key-count-limited server-side beyond the overall request body limit (2MB
+      per batch).
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Response
+
+<ResponseField name="log_ids" type="array">
+  Array of ULID strings, one per event, in the same order as the request.
+</ResponseField>
+
+<ResponseField name="request_id" type="string">
+  Unique request identifier for tracing.
+</ResponseField>
+
+## Examples
+
+### curl
+
+```bash
+curl -X POST https://api.auditrails.io/v1/events/batch \
+  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "events": [
+      {
+        "action": "user.login",
+        "actor_id": "user_123",
+        "resource": "session/sess_abc",
+        "metadata": { "ip": "203.0.113.1" }
+      },
+      {
+        "action": "document.created",
+        "actor_id": "user_123",
+        "resource": "document/doc-456",
+        "metadata": { "title": "Q4 Report" }
+      },
+      {
+        "action": "permission.granted",
+        "actor_id": "user_123",
+        "resource": "document/doc-456",
+        "metadata": { "grantee": "user_789", "role": "viewer" }
+      }
+    ]
+  }'
+```
+
+### 202 Accepted
+
+```json
+{
+  "log_ids": [
+    "01HX7YGBFZ3QK8N9VMJT5RPCE4",
+    "01HX7YGBFZ3QK8N9VMJT5RPCE5",
+    "01HX7YGBFZ3QK8N9VMJT5RPCE6"
+  ],
+  "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7"
+}
+```
+
+## Error Responses
+
+Every error uses the same envelope — see [Error Codes](/reference/error-codes) for the full list. A few examples relevant to this endpoint:
+
+### 400 Bad Request — Empty Batch
+
+```json
+{
+  "error": {
+    "code": "validation/batch_empty",
+    "message": "The events array is empty.",
+    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```
+
+### 400 Bad Request — Batch Too Large
+
+```json
+{
+  "error": {
+    "code": "validation/batch_too_large",
+    "message": "Batch size exceeds maximum of 100 events.",
+    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```
+
+### 422 Unprocessable Entity — Validation Error in One Event
+
+```json
+{
+  "error": {
+    "code": "validation/missing_action",
+    "message": "event[2]: the 'action' field is required.",
+    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```
+
+### 409 Conflict — Idempotency Key Reused
+
+```json
+{
+  "error": {
+    "code": "event/idempotency_key_conflict",
+    "message": "This Idempotency-Key was already used with a different request body.",
+    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```
+
+<Note>
+Batch requests are atomic — if any event fails validation, the entire batch is rejected. Fix the invalid event and resubmit the full batch.
+</Note>

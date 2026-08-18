@@ -1,0 +1,238 @@
+---
+title: PHP SDK
+description: Official AuditRails SDK for PHP — PSR-18 compatible, auto-flush on shutdown, fire-and-forget logging.
+---
+
+# PHP SDK
+
+The `auditrails/auditrails-php` package provides a PSR-18 compatible client for logging audit events from any PHP application. It buffers events in memory and automatically flushes them via `register_shutdown_function`.
+
+Source: [github.com/auditrails/auditrails-php](https://github.com/auditrails/auditrails-php)
+
+## Installation
+
+```bash
+composer require auditrails/auditrails-php
+```
+
+Requires **PHP 8.1+** and a PSR-18 HTTP client (e.g. Guzzle).
+
+```bash
+# If you don't already have a PSR-18 client:
+composer require guzzlehttp/guzzle
+```
+
+## Initialization
+
+```php
+use AuditRails\AuditRails;
+use AuditRails\Config;
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\HttpFactory;
+
+$audit = new AuditRails(
+    config: new Config(apiKey: $_ENV['AUDITRAILS_API_KEY']),
+    httpClient: new Client(),
+    requestFactory: new HttpFactory(),
+    streamFactory: new HttpFactory(),
+);
+```
+
+### Config Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `apiKey` | `string` | **required** | Your API key (`at_live_...` or `at_test_...`) |
+| `baseUrl` | `string` | `https://api.auditrails.io` | API endpoint |
+| `batchSize` | `int` | `100` | Max events per batch (capped at 100) |
+| `maxRetries` | `int` | `3` | Retry attempts on 5xx errors |
+| `timeout` | `int` | `10` | HTTP request timeout in seconds |
+| `autoShutdown` | `bool` | `true` | Register `register_shutdown_function` for auto-flush |
+
+## Logging Events
+
+### Buffered (fire-and-forget)
+
+`log()` buffers the event and never throws. Events are flushed automatically at shutdown or when the buffer is full.
+
+```php
+use AuditRails\AuditEvent;
+
+$audit->log(new AuditEvent(
+    action: 'user.login',
+    actorId: 'user_123',
+    resource: 'session/sess_abc',
+    metadata: ['ip' => '203.0.113.1', 'method' => 'oauth2'],
+));
+```
+
+### Direct (synchronous)
+
+`logDirect()` sends immediately and returns the response. It throws on errors.
+
+```php
+$response = $audit->logDirect(new AuditEvent(
+    action: 'document.deleted',
+    actorId: 'user_456',
+    resource: 'document/doc-789',
+));
+
+echo $response->logId;     // "01HXYZ..."
+echo $response->requestId; // "req_..."
+```
+
+### Batch Direct
+
+```php
+$response = $audit->logBatchDirect([
+    new AuditEvent(action: 'user.login', actorId: 'user_1'),
+    new AuditEvent(action: 'user.login', actorId: 'user_2'),
+]);
+
+echo count($response->logIds); // 2
+```
+
+## Laravel Integration
+
+### Service Provider Singleton
+
+Register the client as a singleton in `AppServiceProvider`:
+
+```php
+// app/Providers/AppServiceProvider.php
+use AuditRails\AuditRails;
+use AuditRails\Config;
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\HttpFactory;
+
+public function register(): void
+{
+    $this->app->singleton(AuditRails::class, function () {
+        return new AuditRails(
+            config: new Config(apiKey: config('services.auditrails.api_key')),
+            httpClient: new Client(),
+            requestFactory: new HttpFactory(),
+            streamFactory: new HttpFactory(),
+        );
+    });
+}
+```
+
+```php
+// config/services.php
+'auditrails' => [
+    'api_key' => env('AUDITRAILS_API_KEY'),
+],
+```
+
+### Laravel Middleware
+
+```php
+// app/Http/Middleware/AuditLog.php
+namespace App\Http\Middleware;
+
+use AuditRails\AuditRails;
+use AuditRails\AuditEvent;
+use Closure;
+use Illuminate\Http\Request;
+
+class AuditLog
+{
+    public function __construct(private AuditRails $audit) {}
+
+    public function handle(Request $request, Closure $next, string $action)
+    {
+        $response = $next($request);
+
+        $this->audit->log(new AuditEvent(
+            action: $action,
+            actorId: $request->user()?->id,
+            resource: $request->method() . ' ' . $request->path(),
+            metadata: [
+                'ip' => $request->ip(),
+                'status' => $response->getStatusCode(),
+                'user_agent' => $request->userAgent(),
+            ],
+        ));
+
+        return $response;
+    }
+}
+```
+
+```php
+// routes/web.php
+Route::post('/documents', [DocumentController::class, 'store'])
+    ->middleware('audit:document.created');
+```
+
+### Register the Middleware
+
+```php
+// bootstrap/app.php
+->withMiddleware(function (Middleware $middleware) {
+    $middleware->alias([
+        'audit' => \App\Http\Middleware\AuditLog::class,
+    ]);
+})
+```
+
+## Error Handling
+
+`log()` never throws. For `logDirect()` and `logBatchDirect()`, catch `AuditRailsError`:
+
+```php
+use AuditRails\AuditRailsError;
+
+try {
+    $audit->logDirect(new AuditEvent(action: 'user.login', actorId: 'user_123'));
+} catch (AuditRailsError $e) {
+    echo $e->statusCode;    // 429
+    echo $e->errorCode;     // "rate/limit_exceeded"
+    echo $e->requestId;     // "req_01HX..."
+    echo $e->docUrl;        // "https://docs.auditrails.io/reference/error-codes"
+    echo $e->isRetryable(); // false (true for 5xx)
+}
+```
+
+## Graceful Shutdown
+
+By default, the SDK registers a `register_shutdown_function` callback that flushes all remaining events when the PHP process ends. This works automatically for web requests and CLI scripts.
+
+```php
+// autoShutdown: true (default) — events flush at the end of each request
+
+// For manual control:
+$audit = new AuditRails(
+    config: new Config(apiKey: 'at_live_...', autoShutdown: false),
+    httpClient: new Client(),
+    requestFactory: new HttpFactory(),
+    streamFactory: new HttpFactory(),
+);
+
+// Manually flush before exit
+$audit->flush();
+
+// Or close (flushes + marks client as closed)
+$audit->close();
+```
+
+## PSR-3 Logger
+
+Pass any PSR-3 compatible logger for SDK debug output:
+
+```php
+use Monolog\Logger;
+use Monolog\Handler\StreamHandler;
+
+$logger = new Logger('auditrails');
+$logger->pushHandler(new StreamHandler('php://stderr', Logger::DEBUG));
+
+$audit = new AuditRails(
+    config: new Config(apiKey: 'at_live_...'),
+    httpClient: new Client(),
+    requestFactory: new HttpFactory(),
+    streamFactory: new HttpFactory(),
+    logger: $logger,
+);
+```

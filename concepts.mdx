@@ -1,0 +1,98 @@
+---
+title: Core Concepts
+description: Key concepts in AuditRails — tenants, projects, events, hash chains, and retention.
+---
+
+# Core Concepts
+
+## Organizations (Tenants)
+
+Every AuditRails account is an **organization**. An organization is the top-level tenant — all data (events, API keys, team members) is scoped to it.
+
+- Each organization has a **subscription plan** (Developer, Starter, Pro, Enterprise)
+- Team members can be **Admin**, **Member**, or **Auditor**
+- All API queries enforce `tenant_id` isolation — one org can never see another's data
+
+## Projects
+
+Organizations contain **projects** — logical groupings of audit events. Typical usage:
+
+- One project per application (`frontend`, `backend`, `mobile`)
+- One project per environment (`production`, `staging`)
+- One project per service (`auth-service`, `billing-service`)
+
+API keys are scoped to a project. Events logged with a key are automatically tagged with its project.
+
+## Events
+
+An **audit event** records that something happened. Every event has:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `action` | **Yes** | What happened — e.g., `user.login`, `document.deleted` |
+| `actor_id` | No | Who did it — e.g., `user_123`, `system` |
+| `resource` | No | What was affected — e.g., `document/doc-456` |
+| `metadata` | No | Additional context — key/value pairs (max 10 keys, 1KB per value) |
+
+The SDK automatically adds `log_id` (ULID), `tenant_id`, and `timestamp`.
+
+### Action Naming
+
+Use `resource.verb` format:
+
+```
+user.login          user.logout         user.created
+document.created    document.updated    document.deleted
+api_key.created     api_key.revoked
+payment.processed   payment.refunded
+permission.granted  permission.revoked
+```
+
+## Hash Chains
+
+Every event is **cryptographically hash-chained** using SHA-256:
+
+```
+hash = SHA-256(previous_hash + canonical_payload + timestamp)
+```
+
+- Each tenant has an independent chain
+- The first event in a chain uses a genesis hash (64 zeros)
+- If anyone modifies a log entry, the hash changes and the chain breaks
+- Chain integrity can be verified via the dashboard or the Verify API
+
+This is the core tamper-proof mechanism — it's mathematically impossible to alter a log without detection.
+
+## Storage
+
+Events are stored in two layers:
+
+| Layer | Technology | Purpose | Retention |
+|-------|-----------|---------|-----------|
+| **Hot** | ClickHouse | Fast search and analytics | Plan-based (90d–7y) |
+| **Cold** | S3 + Object Lock | Immutable long-term storage (WORM) | Plan-based (90d–7y) |
+
+**WORM (Write Once Read Many):** S3 Object Lock in COMPLIANCE mode means that once written, logs cannot be deleted or modified — not even by AWS root. This is required for SOC 2, HIPAA, and SEC 17a-4.
+
+## Retention
+
+Data retention depends on your plan:
+
+| Plan | Hot Storage | Cold Storage (WORM) |
+|------|------------|-------------------|
+| Developer | 90 days | 90 days |
+| Starter | 1 year | 1 year |
+| Pro | 1 year | 1 year |
+| Enterprise | 7 years | 7 years |
+
+After the retention period, data is automatically purged. A **data deletion certificate** is generated as proof.
+
+## API Keys
+
+API keys authenticate SDK and API requests:
+
+- Format: `at_live_xxxxxxxxxxxxxxxxxxxx` (production) or `at_test_xxxxxxxxxxxxxxxxxxxx` (testing)
+- Keys are **hashed** (SHA-256) before storage — AuditRails never stores your raw key
+- Keys are scoped to a project
+- Keys can be revoked instantly from the dashboard
+- Test keys are free and don't count toward plan quotas
