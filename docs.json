@@ -1,7 +1,11 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "luma",
+  "theme": "mint",
   "name": "AuditRails",
+  "logo": {
+    "dark": "/images/logo-dark.svg",
+    "light": "/images/logo-light.svg"
+  },
   "colors": {
     "primary": "#3366FF",
     "light": "#5588FF",
@@ -119,6 +123,11 @@
     "socials": {
       "github": "https://github.com/auditrails",
       "linkedin": "https://linkedin.com/company/auditrails"
+    }
+  },
+  "integrations": {
+    "plausible": {
+      "domain": "docs.auditrails.io"
     }
   },
   "api": {

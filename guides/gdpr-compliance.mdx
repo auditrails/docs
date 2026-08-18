@@ -207,16 +207,10 @@ Redaction rules automatically strip known PII field names from event metadata be
 
 ## Data Residency
 
-| Plan | Storage region |
-|------|---------------|
-| Starter Trails | `us-east-1` (Northern Virginia, USA) |
-| Framework Trails | `us-east-1` (Northern Virginia, USA) |
-| Compliance Trails | `us-east-1` or `eu-west-1` (Ireland, EU) |
-
-If your GDPR obligations require that personal data not leave the EU, you need a **Compliance Trails** plan with EU storage (`eu-west-1`) enabled. Contact your account manager to configure EU-only storage.
+All plans currently store data in a single AWS region — `us-east-1` (Northern Virginia, USA). There is no EU-only storage option available today, regardless of plan.
 
 <Info>
-  AWS `eu-west-1` (Ireland) is an EU jurisdiction for GDPR purposes. Data stored there does not transfer outside the EU/EEA under normal operation. The DPA's EU SCCs cover the residual transfer risk associated with US-based sub-processors (Stripe, MaxMind) that do not store audit event data.
+  If your GDPR obligations require that personal data not leave the EU, talk to us before signing up — see the DPA (available at **Dashboard → Settings → Legal**) for how AuditRails safeguards this cross-border transfer, and reach out to support if you need to discuss your specific residency requirements.
 </Info>
 
 ---
