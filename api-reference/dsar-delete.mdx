@@ -1,57 +1,90 @@
 ---
-title: DSAR Delete
-description: Request deletion of all audit data for a specific actor to fulfill GDPR erasure requests.
+title: "DSAR Delete — Right to Erasure (Right to Be Forgotten)"
+sidebarTitle: "DSAR Delete"
+description: "Submit a Data Subject deletion request to erase all audit events for a given actor from AuditRails hot storage, in line with GDPR Article 17."
 ---
 
-# DSAR Delete
-
-<Warning>
-This is a **dashboard-only** feature, not a Bearer-token API endpoint. There is no `POST /v1/dsar/delete` on the ingestion API — DSAR requests are submitted through the AuditRails dashboard and authenticated by your logged-in session, not an `at_live_…`/`at_test_…` API key. This page describes the real flow.
-</Warning>
-
-Request deletion of all audit events associated with a specific actor, to fulfill GDPR Article 17 (Right to Erasure) and similar regulatory requirements.
-
-## How to Submit a Request
-
-1. Sign in to the [AuditRails dashboard](https://app.auditrails.io) as an organization admin
-2. Go to **Settings → DSAR**
-3. Fill in the request form:
-   - **Actor ID** — must exactly match the `actor_id` used when logging events for this person
-   - **Type** — choose **Delete**
-   - **Requester email** — who to notify when it's done
-   - **Reason** — optional, free text (recorded for audit purposes)
-4. Submit — the request is queued and processed asynchronously
-
-Only one active deletion request per `actor_id` can exist at a time; submitting a duplicate while one is pending or processing is rejected with a validation error on the form.
-
-## Status
-
-Each request has a status visible in the DSAR request history on the same page: `pending`, `processing`, `complete`, or `failed`.
-
-## How It Works
-
-1. You submit a deletion request with the actor ID, from the dashboard
-2. AuditRails removes the actor's events from hot storage (ClickHouse) — they no longer appear in search or the dashboard
-3. Events in cold storage (S3 WORM) are handled according to WORM constraints (see below)
-4. Once `complete`, the request shows as done in the DSAR history table
-
-## S3 WORM Storage Limitations
-
-<Warning>
-Events stored in S3 with Object Lock (WORM / COMPLIANCE mode) **cannot be deleted or modified before the retention period expires** -- not even by AuditRails or AWS root. This is by design for regulatory compliance (SOC 2, HIPAA, SEC 17a-4).
-</Warning>
-
-When a DSAR delete request is processed:
-
-- **Hot storage (ClickHouse):** Events are deleted immediately.
-- **Cold storage (S3 WORM):** Events cannot be physically deleted until the Object Lock retention period expires. Instead, they are logically marked as deleted and excluded from all future exports, reads, and the dashboard.
-
-Retention periods vary by plan and by which compliance framework(s) are active on the events in question — check your organization's current retention under **Settings → Organization** in the dashboard rather than relying on a fixed table here, since it's admin-configurable and framework-dependent.
+When a data subject exercises their right to erasure under GDPR, you can action that request directly from the AuditRails dashboard. DSAR Delete is a **dashboard-only workflow** — there is no bearer-token API endpoint for this feature. Only organisation admins can submit and view DSAR requests, and all submissions are authenticated by your existing logged-in session at [app.auditrails.io](https://app.auditrails.io).
 
 <Info>
-This approach aligns with GDPR Article 17(3)(e), which permits retention where processing is necessary for the establishment, exercise, or defense of legal claims, and with regulatory requirements that mandate immutable audit trails.
+  **GDPR legal basis — Article 17.** Article 17 grants data subjects the right to request erasure of their personal data without undue delay where one of several grounds applies — for example, the data is no longer necessary for the purpose it was collected, or the subject withdraws consent. GDPR Article 17(3)(e) provides a counterbalancing exception: retention remains lawful where it is necessary for the establishment, exercise, or defence of legal claims, and where regulatory frameworks mandate the preservation of immutable audit trails. AuditRails's architecture reflects this balance, as described below.
 </Info>
 
-## Access Control
+---
 
-Only organization admins can submit or view DSAR requests — this is intentionally more restrictive than regular API key access, since DSAR requests handle personal data subject to compliance obligations.
+## How to submit a deletion request
+
+<Steps>
+  <Step title="Sign in as an organisation admin">
+    Go to [app.auditrails.io](https://app.auditrails.io) and sign in with an account that holds the **Org Admin** role. DSAR features are restricted to admins — member-level accounts will not see the DSAR section.
+  </Step>
+  <Step title="Open the DSAR panel">
+    Navigate to **Settings → DSAR** in the left-hand sidebar. You will see a submission form and a history table of all past and in-progress requests for your organisation.
+  </Step>
+  <Step title="Fill in the request form">
+    Complete the following fields:
+
+    | Field | Required | Notes |
+    |---|---|---|
+    | **Actor ID** | Yes | Must exactly match the `actor_id` value used when the events were logged. A typo or case mismatch will result in no events being deleted. |
+    | **Type** | Yes | Select **Delete**. |
+    | **Requester email** | Yes | The email address of the data subject or their representative, for your internal records. |
+    | **Reason** | No | A free-text note for your internal records (e.g. "Erasure request received 2024-06-01 — subject withdrew consent"). |
+  </Step>
+  <Step title="Submit the request">
+    Click **Submit**. The request is immediately queued and processed asynchronously. You will see it appear in the DSAR history table with a status of **pending**.
+  </Step>
+  <Step title="Confirm completion">
+    Monitor the DSAR history table. Once the status changes to **complete**, hot-storage deletion is confirmed. Read the cold-storage section below for the important limitations that apply to WORM-archived events.
+  </Step>
+</Steps>
+
+---
+
+## How the deletion works
+
+After you submit a request, AuditRails carries out the following steps automatically:
+
+1. **Queues and validates the request.** The actor ID is verified against your organisation and the request enters the processing queue.
+2. **Deletes from hot storage (ClickHouse).** All events where `actor_id` exactly matches the supplied value are permanently deleted from the active ClickHouse store. These events immediately stop appearing in dashboard searches, queries, and API reads.
+3. **Handles cold storage (S3 WORM) with a logical deletion.** See the critical limitation below.
+
+---
+
+## S3 WORM cold storage — critical limitation
+
+<Warning>
+  **Events in S3 WORM cold storage cannot be physically deleted before their retention period expires — not even by AuditRails staff or AWS root account users.**
+
+  AuditRails archives events to Amazon S3 with **Object Lock in COMPLIANCE mode**. This means the retention lock is enforced at the AWS infrastructure level and is legally immutable for the duration of the configured retention period. No policy override, support request, or elevated privilege can remove or shorten a COMPLIANCE-mode lock before it expires.
+
+  When a DSAR Delete request reaches `complete`, AuditRails applies a **logical deletion marker** to all matching cold-storage events. Logically deleted events are:
+  - **Excluded from all future exports**, including DSAR Export runs.
+  - **Excluded from all dashboard reads and API queries.**
+  - **Not returned** in any search, report, or data feed.
+
+  The underlying S3 objects will be **physically deleted automatically** once their retention period expires. To find out your organisation's exact retention periods by plan and compliance framework, go to **Settings → Organisation**.
+</Warning>
+
+This design is intentional and reflects a deliberate balance between GDPR Article 17 erasure obligations and Article 17(3)(e), which permits continued retention where it is required for legal proceedings or where regulatory frameworks mandate immutable audit records. By logically deleting events immediately and physically deleting them at the earliest lawful moment, AuditRails provides a defensible, compliance-ready erasure posture.
+
+---
+
+## Request statuses
+
+| Status | Meaning |
+|---|---|
+| `pending` | The request has been accepted and is waiting in the processing queue. No action needed. |
+| `processing` | AuditRails is actively deleting events from hot storage and applying logical deletion markers to cold-storage objects. |
+| `complete` | Hot-storage deletion is confirmed and cold-storage logical deletion markers have been applied. |
+| `failed` | Processing encountered an error. The row will display an error message. Contact [support@auditrails.io](mailto:support@auditrails.io) with the request ID shown in the table. |
+
+---
+
+## Constraints and limits
+
+- **One active request per actor at a time.** If a deletion request for a given `actor_id` is already in `pending` or `processing` state, submitting a second request for the same actor will be rejected. Wait for the in-flight request to reach `complete` or `failed` before resubmitting.
+- **Actor ID must be an exact match.** The lookup is case-sensitive and matches the literal string stored in the `actor_id` field at event ingestion time. There is no fuzzy matching or alias resolution.
+- **Hot-storage deletion is immediate and irreversible.** Once events are removed from ClickHouse they cannot be recovered. Ensure you have completed any required DSAR Export before submitting a deletion request if you need to provide the data subject with a copy first.
+- **Cold-storage physical deletion follows your retention schedule.** The exact retention period varies by your AuditRails plan and the compliance framework applied to your organisation. Check **Settings → Organisation** for your specific values.
+- **No API equivalent.** DSAR Delete cannot be triggered via the bearer-token REST API. All erasure requests must be submitted through the dashboard by an Org Admin.

@@ -1,68 +1,79 @@
 ---
-title: Python SDK
-description: Official AuditRails SDK for Python — sync and async clients, background thread batching, zero required dependencies.
+title: "Python SDK — AuditRails"
+sidebarTitle: "Python"
+description: "Integrate AuditRails into any Python application. Sync and async clients, zero dependencies for sync, Django and FastAPI integration examples included."
 ---
 
-# Python SDK
-
-The `auditrails` package provides both synchronous and async clients for logging audit events from any Python application. The sync client uses `urllib` (zero dependencies) with a background thread for batching. The async client uses `httpx` (optional dependency).
-
-Source: [github.com/auditrails/auditrails-python](https://github.com/auditrails/auditrails-python)
+The AuditRails Python SDK supports both synchronous and asynchronous Python applications. The synchronous client uses only the standard library (`urllib`) so it installs with zero additional dependencies. The async client adds `httpx` for non-blocking HTTP and is installed via an optional extra. Both clients are thread-safe, buffer events automatically, and flush on process exit so you never lose an audit record.
 
 ## Installation
 
-<CodeGroup>
+<Tabs>
+  <Tab title="Sync (zero dependencies)">
+    ```bash
+    pip install auditrails
+    ```
 
-```bash sync
-pip install auditrails
-```
+    The synchronous client runs a background daemon thread and flushes via `atexit`. Requires **Python 3.9+**.
+  </Tab>
+  <Tab title="Async (httpx)">
+    ```bash
+    pip install auditrails[async]
+    ```
 
-```bash async
-pip install auditrails[async]
-```
-
-</CodeGroup>
-
-Requires **Python 3.9+**. The `[async]` extra installs `httpx` for the `AsyncAuditRails` client.
+    Installs `auditrails` plus `httpx`. Use `AsyncAuditRails` in `asyncio`-based applications (FastAPI, aiohttp, etc.).
+  </Tab>
+</Tabs>
 
 ## Initialization
 
-<CodeGroup>
+<Tabs>
+  <Tab title="Sync">
+    Create an `AuditRails` instance with a `Config` object. The only required field is `api_key`. The client starts its background flush thread immediately on construction.
 
-```python Sync
-from auditrails import AuditRails, Config
+    ```python
+    from auditrails import AuditRails, Config
 
-audit = AuditRails(Config(api_key="at_live_..."))
-```
+    audit = AuditRails(Config(api_key="at_live_..."))
+    ```
 
-```python Async
-from auditrails import AsyncAuditRails, Config
+    Instantiate the client once at module level (or in your application factory) and import it wherever you need it.
+  </Tab>
+  <Tab title="Async">
+    Create an `AsyncAuditRails` instance and call `await audit.start()` before logging any events. Use `await audit.close()` during application shutdown to flush remaining events.
 
-audit = AsyncAuditRails(Config(api_key="at_live_..."))
-await audit.start()  # starts background flush task + httpx client
-```
+    ```python
+    from auditrails import AsyncAuditRails, Config
 
-</CodeGroup>
+    audit = AsyncAuditRails(Config(api_key="at_live_..."))
 
-### Config Options
+    # Must be called before logging
+    await audit.start()
+    ```
+  </Tab>
+</Tabs>
+
+### Configuration options
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `api_key` | `str` | **required** | Your API key (`at_live_...` or `at_test_...`) |
-| `base_url` | `str` | `https://api.auditrails.io` | API endpoint |
-| `batch_size` | `int` | `100` | Max events per batch (capped at 100) |
-| `flush_interval` | `float` | `1.0` | Auto-flush interval in seconds |
-| `max_retries` | `int` | `3` | Retry attempts on 5xx errors |
-| `timeout` | `float` | `10.0` | HTTP request timeout in seconds |
+|---|---|---|---|
+| `api_key` | `str` | *(required)* | Your AuditRails API key. |
+| `base_url` | `str` | `https://api.auditrails.io` | Override the API endpoint. |
+| `batch_size` | `int` | `100` | Maximum events per HTTP request. |
+| `flush_interval` | `float` | `1.0` (seconds) | How often the buffer is flushed, in seconds. |
+| `max_retries` | `int` | `3` | Retry attempts on `5xx` responses. |
+| `timeout` | `float` | `10.0` (seconds) | Per-request timeout in seconds. |
 
-## Logging Events
+## Logging events
 
-### Buffered (fire-and-forget)
+### Buffered logging (recommended)
 
-`log()` buffers the event and returns immediately. It never raises.
+`audit.log()` adds an `AuditEvent` to an in-memory buffer and returns immediately. The buffer is flushed in the background on the `flush_interval` schedule. This method **never raises an exception**.
 
 ```python
-from auditrails import AuditEvent
+from auditrails import AuditRails, Config, AuditEvent
+
+audit = AuditRails(Config(api_key="at_live_..."))
 
 audit.log(AuditEvent(
     action="user.login",
@@ -72,67 +83,69 @@ audit.log(AuditEvent(
 ))
 ```
 
-### Direct (synchronous / awaitable)
+### Direct (immediate) logging
 
-`log_direct()` sends immediately and returns the response. It raises on errors.
+`audit.log_direct()` sends the event immediately and returns the API response. It **raises `AuditRailsError`** on failure.
 
-<CodeGroup>
+<Tabs>
+  <Tab title="Sync">
+    ```python
+    from auditrails import AuditRails, Config, AuditEvent
 
-```python Sync
-response = audit.log_direct(AuditEvent(
-    action="document.deleted",
-    actor_id="user_456",
-    resource="document/doc-789",
-))
-print(response.log_id)      # "01HXYZ..."
-print(response.request_id)  # "req_..."
-```
+    response = audit.log_direct(AuditEvent(
+        action="document.deleted",
+        actor_id="user_456",
+        resource="document/doc-789",
+    ))
+    print(response.log_id)  # "01HXYZ..."
+    ```
+  </Tab>
+  <Tab title="Async">
+    ```python
+    from auditrails import AsyncAuditRails, Config, AuditEvent
 
-```python Async
-response = await audit.log_direct(AuditEvent(
-    action="document.deleted",
-    actor_id="user_456",
-    resource="document/doc-789",
-))
-print(response.log_id)      # "01HXYZ..."
-print(response.request_id)  # "req_..."
-```
+    response = await audit.log_direct(AuditEvent(
+        action="document.deleted",
+        actor_id="user_456",
+        resource="document/doc-789",
+    ))
+    print(response.log_id)  # "01HXYZ..."
+    ```
+  </Tab>
+</Tabs>
 
-</CodeGroup>
+### Direct batch logging
 
-### Batch Direct
+Send multiple events in a single HTTP request, bypassing the buffer. **Raises on error.**
 
 ```python
-response = audit.log_batch_direct([
-    AuditEvent(action="user.login", actor_id="user_1"),
-    AuditEvent(action="user.login", actor_id="user_2"),
+await audit.log_batch_direct([
+    AuditEvent(action="document.created", actor_id="user_123", resource="document/doc-001"),
+    AuditEvent(action="document.shared",  actor_id="user_123", resource="document/doc-001"),
 ])
-print(response.log_ids)  # ["01HX...", "01HX..."]
 ```
 
-## Django Integration
-
-### Settings Singleton
+### Manual flush
 
 ```python
-# myapp/audit.py
-from auditrails import AuditRails, Config
-from django.conf import settings
+# Sync
+audit.flush()
 
-audit = AuditRails(Config(api_key=settings.AUDITRAILS_API_KEY))
+# Async
+await audit.flush()
 ```
 
-```python
-# settings.py
-AUDITRAILS_API_KEY = env("AUDITRAILS_API_KEY")
-```
+## Framework integration
 
-### Django Middleware
+### Django
+
+Add `AuditMiddleware` to your `MIDDLEWARE` list in `settings.py`. The middleware logs every request after the response has been generated, capturing the final HTTP status code.
 
 ```python
 # myapp/middleware.py
-from myapp.audit import audit
-from auditrails import AuditEvent
+from auditrails import AuditRails, Config, AuditEvent
+
+audit = AuditRails(Config(api_key="at_live_..."))
 
 class AuditMiddleware:
     def __init__(self, get_response):
@@ -157,118 +170,73 @@ class AuditMiddleware:
 ```python
 # settings.py
 MIDDLEWARE = [
-    # ...
+    # ... other middleware ...
     "myapp.middleware.AuditMiddleware",
 ]
 ```
 
-### Decorator Pattern
+### FastAPI
 
-```python
-# myapp/decorators.py
-import functools
-from myapp.audit import audit
-from auditrails import AuditEvent
-
-def audit_action(action: str):
-    def decorator(view_func):
-        @functools.wraps(view_func)
-        def wrapper(request, *args, **kwargs):
-            response = view_func(request, *args, **kwargs)
-            audit.log(AuditEvent(
-                action=action,
-                actor_id=str(request.user.id) if request.user.is_authenticated else None,
-                resource=request.path,
-            ))
-            return response
-        return wrapper
-    return decorator
-```
-
-```python
-# views.py
-@audit_action("document.created")
-def create_document(request):
-    # ...
-```
-
-## FastAPI Integration
-
-Use the async client with FastAPI's lifespan:
+Use a lifespan context manager to start and close the async client alongside your application.
 
 ```python
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
-from auditrails import AsyncAuditRails, AuditEvent, Config
+from fastapi import FastAPI
+from auditrails import AsyncAuditRails, Config, AuditEvent
 
 audit = AsyncAuditRails(Config(api_key="at_live_..."))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await audit.start()
+    await audit.start()   # Start background tasks
     yield
-    await audit.close()
+    await audit.close()   # Flush remaining events on shutdown
 
 app = FastAPI(lifespan=lifespan)
 
-@app.post("/documents")
-async def create_document(request: Request):
-    # ... create document
+@app.delete("/documents/{doc_id}")
+async def delete_document(doc_id: str, user_id: str):
+    await do_delete(doc_id)
 
     audit.log(AuditEvent(
-        action="document.created",
-        actor_id=request.state.user_id,
-        resource=f"document/{doc.id}",
+        action="document.deleted",
+        actor_id=user_id,
+        resource=f"document/{doc_id}",
     ))
 
-    return {"id": doc.id}
+    return {"status": "deleted"}
 ```
 
-## Error Handling
+## Error handling
 
-`log()` never raises. For `log_direct()` and `log_batch_direct()`, catch `AuditRailsError`:
+`log()` never raises. For `log_direct()` and `log_batch_direct()`, catch `AuditRailsError` to inspect the failure details.
 
 ```python
-from auditrails import AuditRailsError, AuditRailsTimeoutError
+from auditrails import AuditRailsError, AuditEvent
 
 try:
     audit.log_direct(AuditEvent(action="user.login", actor_id="user_123"))
 except AuditRailsError as e:
-    print(e.status_code)  # 429
-    print(e.code)         # "rate/limit_exceeded"
-    print(e.request_id)   # "req_01HX..."
-    print(e.doc_url)      # "https://docs.auditrails.io/reference/error-codes"
-    print(e.retryable)    # False (True for 5xx)
-except AuditRailsTimeoutError as e:
-    print(f"Timed out after {e.timeout}s")
+    print(e.status_code)  # HTTP status, e.g. 401
+    print(e.code)         # Machine-readable code, e.g. "INVALID_API_KEY"
+    print(e.request_id)   # AuditRails request ID for support
+    print(e.retryable)    # True if retrying might succeed
 ```
 
-## Background Thread Batching
+## Graceful shutdown
 
-The sync `AuditRails` client runs a daemon background thread that wakes up every `flush_interval` seconds (default: 1s) and sends all buffered events as a batch. The thread is:
+**Sync:** The background daemon thread is registered with Python's `atexit` module. When your process exits normally, it automatically flushes any buffered events. You can also flush and shut down manually:
 
-- **Daemon**: it does not prevent process exit.
-- **Thread-safe**: `log()` uses a lock for buffer access.
-- **Auto-registered**: `atexit.register(self.close)` ensures a final flush before the process exits.
-
-If the buffer fills to `batch_size` before the interval, the thread is signaled to flush immediately.
-
-## Graceful Shutdown
-
-The sync client registers an `atexit` handler automatically. For the async client, call `close()` explicitly:
-
-<CodeGroup>
-
-```python Sync
-# Automatic — atexit handler flushes on process exit
-
-# For manual control:
-audit.close()  # flushes buffer, stops background thread
+```python
+audit.close()  # Flush + stop background thread
 ```
 
-```python Async
-# Must be called explicitly:
-await audit.close()  # flushes buffer, cancels flush task, closes httpx client
+**Async:** The `atexit` hook is not available for async clients. You must call `await audit.close()` explicitly — for example, in your framework's shutdown lifecycle hook (as shown in the FastAPI lifespan example above).
+
+```python
+await audit.close()  # Flush + stop background tasks
 ```
 
-</CodeGroup>
+<Note>
+  For async applications, always wire `await audit.close()` into your framework's shutdown hook. If the event loop is torn down before `close()` is called, buffered events that have not yet been flushed will be lost.
+</Note>

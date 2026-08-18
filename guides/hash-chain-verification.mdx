@@ -1,123 +1,194 @@
 ---
-title: Hash Chain Verification
-description: How AuditRails cryptographic hash chaining works and how to verify log integrity.
+title: "Hash Chain Verification for Audit Logs"
+sidebarTitle: "Hash Chain"
+description: "Understand how AuditRails uses SHA-256 hash chaining to make your audit logs tamper-proof, and how to verify chain integrity."
 ---
 
-# Hash Chain Verification
+Every event written to AuditRails is cryptographically linked to the one before it. If anyone deletes, modifies, or inserts an event — even at the infrastructure level — the chain breaks at that point and verification fails. This page explains how the chain is constructed, how to verify it from the dashboard or the API, and what to do if a break is detected.
 
-Every audit event in AuditRails is cryptographically linked to the previous one, forming an **immutable chain**. This is how we guarantee tamper-proof logging.
+## How the Hash Chain Works
 
-## How It Works
-
-Each event's hash is computed as:
+Each new event's hash is computed from three inputs: the previous event's hash, the canonical payload of the current event, and the current timestamp in milliseconds.
 
 ```
 hash = SHA-256(previous_hash + canonical_payload + timestamp_ms)
 ```
 
-Where:
-- **`previous_hash`** — the hash of the preceding event in the chain (64 zeros for the first event)
-- **`canonical_payload`** — JSON of `{log_id, tenant_id, action, actor_id, resource, metadata}` (excludes worker-enriched fields)
-- **`timestamp_ms`** — millisecond-precision server timestamp
+### Canonical Payload
 
-### Chain Structure
+The canonical payload is a deterministic JSON serialisation of the core event fields:
 
-```
-Event 1: hash_1 = SHA-256("000...000" + payload_1 + ts_1)    ← genesis
-Event 2: hash_2 = SHA-256(hash_1 + payload_2 + ts_2)
-Event 3: hash_3 = SHA-256(hash_2 + payload_3 + ts_3)
-...
-```
-
-Each tenant has an **independent chain**. Tenant A's events never mix with Tenant B's chain.
-
-## Why This Matters
-
-**Without hash chaining**, someone with database access could:
-- Delete embarrassing log entries
-- Modify timestamps to create alibis
-- Insert fabricated events after the fact
-
-**With hash chaining**, any modification breaks the chain:
-- Change event 5 → its hash changes → event 6's `previous_hash` no longer matches → chain broken
-- Delete event 5 → event 6 points to a hash that doesn't exist → chain broken
-- Insert a fake event → the chain sequence breaks → immediately detectable
-
-## Verifying Chain Integrity
-
-### Via Dashboard
-
-1. Go to **Dashboard → Logs**
-2. Click any event to see its detail view
-3. The **chain navigation** shows prev/next events with hashes
-4. A broken chain is flagged with a warning indicator
-
-### Via API
-
-```bash
-curl https://api.auditrails.io/v1/events/verify \
-  -H "Authorization: Bearer at_live_..." \
-  -G -d "from=2024-01-01T00:00:00Z" -d "to=2024-01-31T23:59:59Z"
-```
-
-Response (healthy chain):
 ```json
 {
-  "verified": true,
-  "events_checked": 15420,
-  "chain_start": "2024-01-01T00:00:01.234Z",
-  "chain_end": "2024-01-31T23:59:58.901Z"
+  "log_id": "evt_01hx...",
+  "tenant_id": "ten_01gy...",
+  "action": "access.granted",
+  "actor_id": "user_123",
+  "resource": "document/456",
+  "metadata": { "role": "editor" }
 }
 ```
 
-Response (broken chain):
+<Info>
+  Worker-enriched fields — `country`, `city`, `ip_address`, and the chain fields themselves (`chain_seq`, `hash`, `previous_hash`) — are deliberately excluded from the canonical payload. This ensures the hash is stable regardless of how AuditRails enriches the event after ingestion.
+</Info>
+
+### Genesis Event
+
+The very first event in a tenant's chain uses 64 zero characters (`0000...0000`) as its `previous_hash`. Every subsequent event's hash depends on all events before it, forming an unbroken chain from the first record ever written.
+
+### Tenant Isolation
+
+Each tenant maintains a completely independent chain. There is no cross-tenant dependency, so a verification run for your organisation only checks your own events.
+
+---
+
+## Why Tamper Detection Works
+
+The chain's security comes from the one-way nature of SHA-256:
+
+| Attack vector | What happens |
+|---------------|--------------|
+| **Delete an event** | The next event's `previous_hash` no longer matches — chain breaks at the deleted sequence number. |
+| **Modify an event** | The modified event produces a different hash — chain breaks at that sequence number. |
+| **Insert an event** | Sequence numbers shift — all subsequent hashes are invalid. |
+| **Replay / backfill** | Timestamp is fixed in the hash — replaying with a different time produces a different hash. |
+
+A valid chain is cryptographic proof that every event exists exactly as it was written, in the correct order, with no gaps.
+
+---
+
+## Verify via the Dashboard
+
+You can inspect individual events and navigate the chain directly in the UI.
+
+<Steps>
+  <Step title="Open the Logs view">
+    Navigate to **Dashboard → Logs** and locate the event you want to inspect.
+  </Step>
+  <Step title="Click the event">
+    The event detail panel opens. Scroll down to the **Chain** section.
+  </Step>
+  <Step title="Navigate the chain">
+    The panel displays the current event's `hash` and `chain_seq`, along with links to the previous and next events in the chain. Each linked event shows its own hash so you can visually confirm they match.
+  </Step>
+</Steps>
+
+For bulk verification across an audit period, use the API instead.
+
+---
+
+## Verify via the API
+
+The `/v1/events/verify` endpoint checks a range of events and returns a single pass/fail result with full diagnostics.
+
+### Endpoint
+
+```
+GET https://api.auditrails.io/v1/events/verify
+```
+
+### Query Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `from_seq` | integer | 1 | Start of the sequence range to verify (inclusive). |
+| `to_seq` | integer | `from_seq + 999` | End of the sequence range to verify (inclusive). Default range is 1,000 events. |
+
+### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `valid` | boolean | `true` if the entire range is intact; `false` if any break was found. |
+| `checked` | integer | Number of events actually examined. |
+| `first_seq` | integer | First sequence number in the verified range. |
+| `last_seq` | integer | Last sequence number in the verified range. |
+| `broken_at` | integer | *(Only if `valid: false`)* Sequence number of the first broken event. |
+| `broken_hash` | string | *(Only if `valid: false`)* The invalid hash value found at `broken_at`. |
+
+### Examples
+
+<CodeGroup>
+  ```bash Verify a range
+  curl -G https://api.auditrails.io/v1/events/verify \
+    -H "Authorization: Bearer at_live_..." \
+    -d "from_seq=1" \
+    -d "to_seq=5000"
+  ```
+
+  ```bash Verify last 1,000 events (default)
+  curl -G https://api.auditrails.io/v1/events/verify \
+    -H "Authorization: Bearer at_live_..."
+  ```
+
+  ```bash Verify a specific window
+  curl -G https://api.auditrails.io/v1/events/verify \
+    -H "Authorization: Bearer at_live_..." \
+    -d "from_seq=10000" \
+    -d "to_seq=20000"
+  ```
+</CodeGroup>
+
+### Healthy Response
+
 ```json
 {
-  "verified": false,
-  "events_checked": 8234,
-  "first_broken": {
-    "log_id": "01HX...",
-    "chain_seq": 8235,
-    "expected_prev_hash": "a1b2c3...",
-    "actual_prev_hash": "d4e5f6...",
-    "timestamp": "2024-01-15T14:22:33.456Z"
-  }
+  "valid": true,
+  "checked": 500,
+  "first_seq": 1,
+  "last_seq": 500
 }
 ```
 
-## Chain Storage
+### Broken Chain Response
 
-Hash chain state is stored in two places for reliability:
-
-| Store | Purpose | Recovery |
-|-------|---------|----------|
-| **Redis** | Fast cache of latest hash per tenant | Rebuilt from Postgres on cache miss |
-| **Postgres** | Durable `chain_heads` table | Source of truth |
-
-The `chain_heads` table stores:
-- `tenant_id` — which tenant's chain
-- `last_hash` — the most recent hash value
-- `chain_seq` — sequence number (monotonically increasing)
-
-## What Happens If a Chain Breaks
-
-A broken chain is a serious event. It means either:
-
-1. **Data corruption** — a storage-level issue affected event data
-2. **Unauthorized modification** — someone altered log contents
-3. **System bug** — a software defect caused incorrect hash computation
-
-In all cases, the **break point is precisely identified** — you know exactly which event and when. This is critical for incident investigation and compliance audits.
+```json
+{
+  "valid": false,
+  "checked": 42,
+  "first_seq": 1,
+  "last_seq": 42,
+  "broken_at": 42,
+  "broken_hash": "fff3a9c2d1e4b5f6..."
+}
+```
 
 <Warning>
-AuditRails stores logs in S3 with Object Lock (WORM). Even if someone modifies the ClickHouse hot copy, the S3 cold copy remains untouched and can be used to verify and restore the original chain.
+  A broken chain is a critical security finding. If you receive `"valid": false`, export the full verification result immediately, preserve your current log export (CSV), and begin an incident investigation. Do not dismiss this as a transient error — AuditRails is designed so that a healthy chain always returns `valid: true`.
 </Warning>
 
-## For Auditors
+---
 
-When reviewing AuditRails logs for a compliance audit:
+## For Auditors: Independent Verification
 
-1. **Run chain verification** for the audit period — confirms no logs were tampered with
-2. **Check the verification result** — `verified: true` means the chain is intact
-3. **Export logs** — CSV export includes `chain_seq` and `hash` columns for independent verification
-4. **Verify independently** — you can recompute hashes from the exported data using the formula above
+If you are conducting an external audit, you can verify AuditRails logs without relying on the platform's own verification output.
+
+<Steps>
+  <Step title="Run verification for the audit period">
+    Call `GET /v1/events/verify` with `from_seq` and `to_seq` set to cover the audit period. Confirm the response contains `"valid": true`.
+  </Step>
+  <Step title="Export the log CSV">
+    From **Dashboard → Logs**, apply a date filter for the audit period and export to CSV. The export includes `chain_seq` and `hash` columns for every event.
+  </Step>
+  <Step title="Recompute hashes independently">
+    Using the canonical payload formula and the exported data, recompute each event's hash and compare it to the `hash` column in the CSV. Any discrepancy indicates tampering.
+
+    The canonical payload is always the JSON of: `log_id`, `tenant_id`, `action`, `actor_id`, `resource`, `metadata` — in that key order, with no extra whitespace.
+
+    ```python
+    import hashlib, json
+
+    def compute_hash(previous_hash: str, payload: dict, timestamp_ms: int) -> str:
+        canonical = json.dumps(payload, separators=(',', ':'), sort_keys=False)
+        data = previous_hash + canonical + str(timestamp_ms)
+        return hashlib.sha256(data.encode()).hexdigest()
+    ```
+  </Step>
+  <Step title="Document your findings">
+    Record the `first_seq`, `last_seq`, `checked`, and `valid` values from the API response as part of your audit evidence package. A `valid: true` result covering the full audit period satisfies hash-chain integrity requirements for SOC 2, HIPAA, ISO 27001 A.8.15, DORA Art.6, and FedRAMP AU-9.
+  </Step>
+</Steps>
+
+<Tip>
+  Share the RBAC auditor role with your external auditor. This gives them read-only dashboard access to run verification and export CSV evidence themselves, without needing your API key.
+</Tip>

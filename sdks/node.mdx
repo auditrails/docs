@@ -1,13 +1,10 @@
 ---
-title: Node.js / TypeScript SDK
-description: Official AuditRails SDK for Node.js and TypeScript — native fetch, zero dependencies, fire-and-forget logging.
+title: "Node.js & TypeScript SDK — AuditRails"
+sidebarTitle: "Node.js"
+description: "Integrate AuditRails into any Node.js or TypeScript application. Zero dependencies, native fetch, automatic batching, and full TypeScript types included."
 ---
 
-# Node.js / TypeScript SDK
-
-The `@auditrails/node` package provides a lightweight, zero-dependency client for logging audit events from any Node.js or TypeScript application. It uses the native `fetch` API (Node 18+) and buffers events in memory for automatic batch delivery.
-
-Source: [github.com/auditrails/auditrails-node](https://github.com/auditrails/auditrails-node)
+The AuditRails Node.js SDK is a lightweight, zero-dependency library that works in any Node.js 18+ application. It ships with full TypeScript type definitions, uses the native `fetch` API (no polyfills needed), and handles all the reliability concerns — batching, retries, and graceful shutdown — so you can focus on recording the events that matter.
 
 ## Installation
 
@@ -15,49 +12,58 @@ Source: [github.com/auditrails/auditrails-node](https://github.com/auditrails/au
 npm install @auditrails/node
 ```
 
-Requires **Node.js 18+** (for native `fetch`).
+The SDK requires **Node.js 18 or later**. No additional dependencies are installed.
 
 ## Initialization
+
+Import `AuditRails` and create a single client instance. The only required option is your API key — everything else has a sensible default.
 
 ```typescript
 import { AuditRails } from '@auditrails/node';
 
 const audit = new AuditRails({
-  apiKey: process.env.AUDITRAILS_API_KEY, // required
+  apiKey: process.env.AUDITRAILS_API_KEY,
 });
 ```
 
-### Options
+Create one client per application and reuse it throughout the process lifetime. Creating multiple clients wastes resources and can result in duplicate shutdown handlers.
+
+### Configuration options
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `apiKey` | `string` | **required** | Your API key (`at_live_...` or `at_test_...`) |
-| `baseUrl` | `string` | `https://api.auditrails.io` | API endpoint |
-| `batchSize` | `number` | `100` | Max events per batch (capped at 100) |
-| `flushInterval` | `number` | `1000` | Flush interval in milliseconds |
-| `maxRetries` | `number` | `3` | Retry attempts on 5xx errors |
-| `timeout` | `number` | `10000` | HTTP request timeout in milliseconds |
-| `autoShutdown` | `boolean` | `true` | Register process exit handlers |
-| `logger` | `Logger` | silent | Custom logger (debug/info/warn/error) |
+|---|---|---|---|
+| `apiKey` | `string` | *(required)* | Your AuditRails API key. |
+| `baseUrl` | `string` | `https://api.auditrails.io` | Override the API endpoint. |
+| `batchSize` | `number` | `100` | Maximum events per HTTP request. |
+| `flushInterval` | `number` | `1000` (ms) | How often the buffer is flushed, in milliseconds. |
+| `maxRetries` | `number` | `3` | Retry attempts on `5xx` responses. |
+| `timeout` | `number` | `10000` (ms) | Per-request timeout in milliseconds. |
+| `autoShutdown` | `boolean` | `true` | Register `beforeExit`, `SIGTERM`, and `SIGINT` handlers to flush on exit. |
+| `logger` | `Logger` | silent | A logger instance for internal diagnostic messages (errors, retries). |
 
-## Logging Events
+The internal flush timer calls `.unref()` on itself, which means it will not prevent your Node.js process from exiting naturally when it is otherwise idle.
 
-### Buffered (fire-and-forget)
+## Logging events
 
-`log()` buffers the event and returns immediately. It never throws.
+### Buffered logging (recommended)
+
+`audit.log()` adds an event to an in-memory buffer and returns immediately. The buffer is flushed to the API in the background every second (or when it reaches `batchSize` events). This method **never throws** — any network or API errors are handled internally.
 
 ```typescript
 audit.log({
   action: 'user.login',
   actorId: 'user_123',
   resource: 'session/sess_abc',
-  metadata: { ip: '203.0.113.1', method: 'oauth2' },
+  metadata: {
+    ip: '203.0.113.1',
+    method: 'oauth2',
+  },
 });
 ```
 
-### Direct (awaitable)
+### Direct (immediate) logging
 
-`logDirect()` sends immediately and returns the API response. It throws on errors.
+`audit.logDirect()` bypasses the buffer and sends the event immediately. It returns a promise that resolves with the API response — including the `logId` assigned to the event — and **throws on any error**. Use this when you need a confirmed receipt before continuing.
 
 ```typescript
 const response = await audit.logDirect({
@@ -65,27 +71,39 @@ const response = await audit.logDirect({
   actorId: 'user_456',
   resource: 'document/doc-789',
 });
-console.log(response.logId);    // "01HXYZ..."
-console.log(response.requestId); // "req_..."
+
+console.log(response.logId); // "01HXYZ..."
 ```
 
-### Batch Direct
+### Direct batch logging
+
+`audit.logBatchDirect()` sends multiple events in a single HTTP request, bypassing the buffer. Like `logDirect`, it **throws on error**.
 
 ```typescript
-const response = await audit.logBatchDirect([
-  { action: 'user.login', actorId: 'user_1' },
-  { action: 'user.login', actorId: 'user_2' },
+const results = await audit.logBatchDirect([
+  { action: 'document.created', actorId: 'user_123', resource: 'document/doc-001' },
+  { action: 'document.shared',  actorId: 'user_123', resource: 'document/doc-001' },
 ]);
-console.log(response.logIds); // ["01HX...", "01HX..."]
 ```
 
-## Express Middleware
+### Manual flush
+
+Call `audit.flush()` to immediately drain the buffer without shutting down the client.
+
+```typescript
+await audit.flush();
+```
+
+## Framework integration
+
+### Express.js
+
+You can wrap `audit.log()` in Express middleware to capture every request automatically. Logging inside the `res.on('finish', ...)` callback ensures you capture the final HTTP status code.
 
 ```typescript
 import express from 'express';
 import { AuditRails } from '@auditrails/node';
 
-const app = express();
 const audit = new AuditRails({ apiKey: process.env.AUDITRAILS_API_KEY });
 
 function auditMiddleware(action: string) {
@@ -98,7 +116,6 @@ function auditMiddleware(action: string) {
         metadata: {
           ip: req.ip,
           statusCode: res.statusCode,
-          userAgent: req.get('user-agent'),
         },
       });
     });
@@ -106,96 +123,77 @@ function auditMiddleware(action: string) {
   };
 }
 
-app.post('/api/documents', auditMiddleware('document.created'), (req, res) => {
-  // ... create document
-  res.json({ id: 'doc_123' });
-});
+// Apply to a specific route
+app.delete('/documents/:id', auditMiddleware('document.deleted'), deleteDocumentHandler);
 ```
 
-## Next.js Example
+### Next.js (App Router)
+
+In serverless environments like Next.js, you should disable `autoShutdown` (the process is long-lived and managed by the framework) and export a singleton from a shared module.
 
 ```typescript
 // lib/audit.ts
 import { AuditRails } from '@auditrails/node';
 
-// Singleton — reused across requests in the same serverless instance
 export const audit = new AuditRails({
   apiKey: process.env.AUDITRAILS_API_KEY,
-  autoShutdown: false, // serverless functions manage their own lifecycle
+  autoShutdown: false, // Next.js manages the process lifecycle
 });
 ```
 
 ```typescript
 // app/api/documents/route.ts
-import { NextResponse } from 'next/server';
 import { audit } from '@/lib/audit';
+import { getServerSession } from 'next-auth';
 
 export async function POST(request: Request) {
-  const body = await request.json();
-
-  // ... create document
+  const session = await getServerSession();
+  const doc = await createDocument(await request.json());
 
   audit.log({
     action: 'document.created',
     actorId: session.userId,
     resource: `document/${doc.id}`,
-    metadata: { title: body.title },
   });
 
-  return NextResponse.json({ id: doc.id });
+  return Response.json(doc);
 }
 ```
 
-## Error Handling
+## Error handling
 
-`log()` never throws. For `logDirect()` and `logBatchDirect()`, catch `AuditRailsError`:
+`log()` never throws. For `logDirect()` and `logBatchDirect()`, catch `AuditRailsError` to inspect the failure. `AuditRailsTimeoutError` is a subclass specifically for request timeouts.
 
 ```typescript
-import { AuditRailsError, AuditRailsTimeoutError } from '@auditrails/node';
+import { AuditRails, AuditRailsError, AuditRailsTimeoutError } from '@auditrails/node';
 
 try {
   await audit.logDirect({ action: 'user.login', actorId: 'user_123' });
 } catch (err) {
-  if (err instanceof AuditRailsError) {
-    console.error('API error:', {
-      code: err.code,           // "rate/limit_exceeded"
-      statusCode: err.statusCode, // 429
-      requestId: err.requestId,   // "req_01HX..."
-      docUrl: err.docUrl,         // "https://docs.auditrails.io/reference/error-codes"
-      retryable: err.retryable,   // false (true for 5xx)
-    });
-  } else if (err instanceof AuditRailsTimeoutError) {
+  if (err instanceof AuditRailsTimeoutError) {
     console.error('Request timed out');
+  } else if (err instanceof AuditRailsError) {
+    console.error(
+      err.code,       // Machine-readable error code, e.g. "INVALID_API_KEY"
+      err.statusCode, // HTTP status code, e.g. 401
+      err.requestId,  // AuditRails request ID for support
+      err.retryable,  // Whether retrying the request makes sense
+    );
   }
 }
 ```
 
-## Graceful Shutdown
+## Graceful shutdown
 
-By default, the SDK registers handlers for `beforeExit`, `SIGTERM`, and `SIGINT` to flush remaining events. This is controlled by the `autoShutdown` option.
+When `autoShutdown` is `true` (the default), the SDK automatically registers process-exit handlers (`beforeExit`, `SIGTERM`, `SIGINT`) and flushes any buffered events before the process terminates. You do not need to add anything extra in most applications.
 
-```typescript
-// autoShutdown: true (default) — no manual shutdown needed
-
-// For manual control (e.g. serverless, tests):
-const audit = new AuditRails({
-  apiKey: 'at_live_...',
-  autoShutdown: false,
-});
-
-// Flush before exit
-await audit.close(); // flushes buffer, stops timer, removes handlers
-```
-
-The flush timer uses `unref()` so it does not keep the Node.js process alive.
-
-## Custom Logger
-
-Pass any object with `debug`, `info`, `warn`, and `error` methods:
+If you need manual control — for example in a worker thread, a test suite, or a framework that manages its own lifecycle — call `audit.close()` explicitly:
 
 ```typescript
-const audit = new AuditRails({
-  apiKey: 'at_live_...',
-  logger: console, // or pino, winston, etc.
-});
+// Flush all pending events and shut down background workers
+await audit.close();
 ```
+
+<Note>
+  In serverless and edge environments that reuse process instances (Next.js, Vercel, AWS Lambda with warm starts), set `autoShutdown: false` and call `audit.flush()` at the end of each handler invocation to avoid losing buffered events between requests.
+</Note>

@@ -1,92 +1,92 @@
 ---
-title: List Action Catalog
-description: Retrieve the compliance action catalog, optionally scoped to your organization's active frameworks.
-api: GET /v1/actions
+title: "List Action Catalog — AuditRails API Reference"
+sidebarTitle: "Actions"
+description: "Browse the compliance action catalog to discover supported event types, their required metadata fields, and which regulatory frameworks they satisfy."
 ---
 
-# List Action Catalog
+The List Action Catalog endpoint returns the full set of named actions that AuditRails recognizes for structured compliance logging. Each entry describes what the action represents, which regulatory frameworks it satisfies, and which metadata fields are required or optional when you log an event with that action name. You can call this endpoint without authentication to explore the catalog, or with your API key to see which actions are active for your organization's subscribed frameworks and get a per-action `subscribed` flag.
 
-Returns every action in the compliance action catalog, grouped by action name with the framework(s) each one belongs to. This is the canonical list of valid `action` values for [`POST /v1/events`](/api-reference/post-events).
+## Endpoint
 
-This is also the endpoint linked from `action/invalid` error responses' `valid_actions_url` field — if you get that error, this is where to look.
+```
+GET https://api.auditrails.io/v1/actions
+```
 
 ## Authentication
 
-This endpoint works both **unauthenticated** and **authenticated**:
+This endpoint works both with and without an API key:
 
-- **Unauthenticated** (no `Authorization` header, or an invalid one): returns the full catalog, no `subscribed` field.
-- **Authenticated** (valid `Authorization: Bearer <api_key>`): returns the catalog filtered to your organization's active framework(s), with a `subscribed` boolean per action.
+- **Unauthenticated** — Returns the complete action catalog with all frameworks and fields. The `subscribed` field is not included in unauthenticated responses.
+- **Authenticated** — Returns the same catalog filtered to the compliance frameworks active for your organization, plus a `subscribed` boolean on each action indicating whether your plan includes that action.
 
-## Response
+## Response Fields
 
-<ResponseField name="actions" type="array">
-  Array of grouped actions.
+<ResponseField name="actions" type="array" required>
+  Array of action catalog entries.
 
-  <Expandable title="Action object">
+  <Expandable title="Action object fields">
     <ResponseField name="action" type="string">
-      The action name (e.g., `aiact.model_inference_logged`).
+      The canonical action name to use in the `action` field when ingesting events, for example `aiact.model_inference_logged`. Action names are namespaced by compliance domain.
     </ResponseField>
-
     <ResponseField name="category" type="string">
-      Category grouping, when set.
+      High-level category grouping for this action, for example `ai_act` or `auth`. Present when set on the catalog entry.
     </ResponseField>
-
     <ResponseField name="description" type="string">
-      Human-readable description of what this action logs.
+      Human-readable explanation of what this action represents and when to use it.
     </ResponseField>
-
     <ResponseField name="frameworks" type="array">
-      Frameworks this action belongs to.
+      List of compliance frameworks this action satisfies.
 
-      <Expandable title="Framework reference">
+      <Expandable title="Framework object fields">
         <ResponseField name="framework" type="string">
-          Internal framework key (e.g., `eu_ai_act`).
+          Machine-readable framework identifier, for example `eu_ai_act` or `soc2`.
         </ResponseField>
-
         <ResponseField name="label" type="string">
-          Display label (e.g., `EU AI Act`).
+          Human-readable framework name, for example `EU AI Act` or `SOC 2`.
         </ResponseField>
-
         <ResponseField name="is_required" type="boolean">
-          Whether this action is a required (vs. optional) event for this framework.
+          `true` if logging this action is required to maintain compliance with the framework. `false` if it is recommended but optional.
         </ResponseField>
       </Expandable>
     </ResponseField>
-
     <ResponseField name="required_fields" type="array">
-      Metadata field names required for this action (validated on `POST /v1/events` — returns `action/missing_required_fields` if absent).
+      List of metadata field names that must be present in the `metadata` object when you ingest an event with this action. Omitting any of these fields causes the ingest request to be rejected with a validation error.
     </ResponseField>
-
     <ResponseField name="optional_fields" type="array">
-      Metadata field names commonly used for this action but not required.
+      List of metadata field names that are recognized and indexed for this action but are not mandatory. Including them enriches your compliance records.
     </ResponseField>
-
     <ResponseField name="subscribed" type="boolean">
-      Only present on authenticated requests — whether this action is usable given your organization's currently active framework(s).
+      Whether your organization's current plan includes this action. Only present in authenticated responses.
     </ResponseField>
   </Expandable>
 </ResponseField>
 
-<ResponseField name="total" type="integer">
-  Number of actions returned.
+<ResponseField name="total" type="integer" required>
+  Total number of actions returned in this response.
 </ResponseField>
 
-## Examples
+<Note>
+  The `required_fields` list is enforced at ingestion time on `POST /v1/events`. Before logging a new action type in production, retrieve its catalog entry to confirm which metadata fields you need to supply. Sending an event with a missing required field returns a validation error.
+</Note>
 
-### curl (unauthenticated — full catalog)
+## Example Request — Unauthenticated
+
+Use the unauthenticated form to browse the full catalog without an API key, for example during integration planning or framework evaluation:
 
 ```bash
 curl https://api.auditrails.io/v1/actions
 ```
 
-### curl (authenticated — filtered to your frameworks)
+## Example Request — Authenticated
+
+Pass your API key to filter the catalog to your organization's active frameworks and see the `subscribed` flag:
 
 ```bash
 curl https://api.auditrails.io/v1/actions \
-  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx"
+  -H "Authorization: Bearer at_live_xxx"
 ```
 
-### 200 OK
+## Example Response
 
 ```json
 {
@@ -96,7 +96,11 @@ curl https://api.auditrails.io/v1/actions \
       "category": "ai_act",
       "description": "Log a single model inference for EU AI Act Article 12 record-keeping.",
       "frameworks": [
-        { "framework": "eu_ai_act", "label": "EU AI Act", "is_required": true }
+        {
+          "framework": "eu_ai_act",
+          "label": "EU AI Act",
+          "is_required": true
+        }
       ],
       "required_fields": ["system_id", "model_id"],
       "optional_fields": ["input_hash", "output_hash", "latency_ms", "risk_tier"],
@@ -107,4 +111,14 @@ curl https://api.auditrails.io/v1/actions \
 }
 ```
 
-This endpoint has no dedicated rate limit beyond the standard [per-IP limit](/api-reference/rate-limits) and, for authenticated requests, your plan's per-second limit.
+## Using the Catalog for Compliance
+
+Each action entry maps directly to one or more regulatory requirements. The `is_required` flag on each framework entry tells you whether you must log that action to remain compliant, or whether it is a recommended best practice. When building an integration for a specific framework, filter the catalog by framework identifier and focus first on actions where `is_required` is `true`.
+
+The `required_fields` and `optional_fields` arrays define the expected shape of the `metadata` object for each event type. Required fields are validated on every ingest request, so aligning your integration to the catalog before going live prevents unexpected ingest failures.
+
+## Error Responses
+
+| Status | Code | Description |
+|--------|------|-------------|
+| `401` | `auth/key_not_found` | An `Authorization` header was supplied but the API key is invalid. Unauthenticated requests (no header) succeed without a key. |

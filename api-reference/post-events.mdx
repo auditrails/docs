@@ -1,65 +1,56 @@
 ---
-title: Log Single Event
-description: Log a single audit event to AuditRails.
-api: POST /v1/events
+title: "Log a Single Event — POST /v1/events"
+sidebarTitle: "Log Event"
+description: "Append a single tamper-proof audit log entry to your AuditRails stream. Accepts an action, actor, resource, and arbitrary metadata."
 ---
 
-# Log Single Event
+The `/v1/events` endpoint lets you record a single immutable audit event in your AuditRails log stream. Every write is cryptographically sealed on ingestion, so the record cannot be altered or deleted after it is accepted. Use this endpoint when you need to capture one discrete action — such as a user login, a permissions change, or a resource deletion — and want the simplest possible integration path. For high-throughput scenarios where you need to record many events at once, consider the [batch endpoint](/api-reference/post-events-batch) instead.
 
-Log a single audit event. The event is hash-chained, stored in WORM storage, and indexed for search.
+## Request
 
-## Request Headers
+**`POST https://api.auditrails.io/v1/events`**
 
-<ParamField header="Idempotency-Key" type="string">
-  Optional client-generated key for safe retries. Reusing the same key with an
-  identical request body replays the original response verbatim (with an
-  `Idempotency-Replayed: true` response header) instead of creating a
-  duplicate event. Reusing it with a *different* body returns `409 Conflict`.
+### Headers
+
+<ParamField header="Authorization" type="string" required>
+  Your AuditRails API key, prefixed with `Bearer`. Use a live key (`at_live_xxx`) for production traffic and a test key (`at_test_xxx`) for development.
+
+  Example: `Bearer at_live_xxx`
 </ParamField>
 
-## Request Body
+<ParamField header="Content-Type" type="string" required>
+  Must be `application/json`.
+</ParamField>
+
+<ParamField header="Idempotency-Key" type="string">
+  An optional client-generated string (e.g. a UUID) that makes the request safe to retry. If you send the same key with an identical request body, AuditRails replays the original 202 response and sets the `Idempotency-Replayed: true` response header — no duplicate event is written.
+
+  Sending the same key with a **different** body returns a `409` conflict error. Keys are retained for 24 hours.
+</ParamField>
+
+### Body
 
 <ParamField body="action" type="string" required>
-  What happened. Must be present in the compliance action catalog of one of
-  your organization's active frameworks, or a custom action you've defined
-  yourself (self-service on every plan). See [`GET /v1/actions`](/api-reference/actions)
-  for the live catalog. Use `resource.verb` format (e.g., `user.login`, `document.deleted`).
-  Maximum 255 characters.
+  A string identifying what happened. Maximum 255 characters. Must match an entry in your compliance catalog or be a registered custom action. We strongly recommend the `resource.verb` format (e.g. `user.login`, `document.deleted`, `permission.granted`) for consistency and searchability.
 </ParamField>
 
 <ParamField body="actor_id" type="string">
-  Who performed the action. Typically a user ID (e.g., `user_123`, `system`).
-  Maximum 255 characters.
+  The identifier of the person or system that performed the action (e.g. a user ID, service account name, or API key ID). Maximum 255 characters. Omit only when the actor is genuinely unknown or not applicable.
 </ParamField>
 
 <ParamField body="resource" type="string">
-  What was affected. Use `type/id` format (e.g., `document/doc-456`, `invoice/inv-789`).
-  Maximum 255 characters.
+  The object the action was performed on. Maximum 255 characters. Use the `type/id` format (e.g. `document/doc-456`, `session/sess_abc`) so that resource-scoped queries work correctly in the AuditRails dashboard.
 </ParamField>
 
 <ParamField body="metadata" type="object">
-  Additional context as key-value pairs. Not currently size- or key-count-limited
-  server-side beyond the overall request body limit (256KB) — keep it reasonably
-  small since it's stored and returned on every read of this event.
+  A free-form key-value object for any additional context you want to attach — IP addresses, request IDs, before/after diffs, etc. There is no hard limit on the number of keys, but the total request body must not exceed **256 KB**.
 </ParamField>
 
-## Response
-
-<ResponseField name="log_id" type="string">
-  Unique identifier for the event (ULID format).
-</ResponseField>
-
-<ResponseField name="request_id" type="string">
-  Unique request identifier for tracing.
-</ResponseField>
-
-## Examples
-
-### curl
+### Example request
 
 ```bash
 curl -X POST https://api.auditrails.io/v1/events \
-  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Authorization: Bearer at_live_xxx" \
   -H "Content-Type: application/json" \
   -d '{
     "action": "user.login",
@@ -72,7 +63,39 @@ curl -X POST https://api.auditrails.io/v1/events \
   }'
 ```
 
+```json
+{
+  "action": "user.login",
+  "actor_id": "user_123",
+  "resource": "session/sess_abc",
+  "metadata": {
+    "ip": "203.0.113.1",
+    "method": "password"
+  }
+}
+```
+
+<Note>
+  **Idempotency semantics:** When you include an `Idempotency-Key` header and the request succeeds, AuditRails caches the response for 24 hours. Any retry with the same key and the same body receives the cached response (with `Idempotency-Replayed: true`) rather than creating a second event. This makes it safe to retry on network timeouts without risk of duplicate log entries.
+</Note>
+
+---
+
+## Response
+
+A `202 Accepted` response means the event has been durably written and sealed.
+
 ### 202 Accepted
+
+<ResponseField name="log_id" type="string">
+  The unique, immutable identifier for the audit log entry. This is a [ULID](https://github.com/ulid/spec) — lexicographically sortable and time-prefixed — that you can use to retrieve or reference this specific event later.
+</ResponseField>
+
+<ResponseField name="request_id" type="string">
+  A unique identifier for the API request itself. Include this value in any support tickets or bug reports related to this call.
+</ResponseField>
+
+### Example response
 
 ```json
 {
@@ -81,60 +104,17 @@ curl -X POST https://api.auditrails.io/v1/events \
 }
 ```
 
-## Error Responses
+---
 
-Every error uses the same envelope — see [Error Codes](/reference/error-codes) for the full list. A few examples relevant to this endpoint:
+## Error responses
 
-### 422 Unprocessable Entity — Missing Required Field
+| HTTP Status | Error Code | Description |
+|---|---|---|
+| `401` | `auth/key_not_found` | The API key in the `Authorization` header was not recognized. Check that you are using the correct key for the target environment. |
+| `409` | `event/idempotency_key_conflict` | An `Idempotency-Key` was reused with a different request body. Use a new key or resend the original body. |
+| `422` | `validation/missing_action` | The `action` field is absent or empty. Include a valid action string in the request body. |
+| `429` | `rate/limit_exceeded` | You have exceeded the request rate limit. Check the `Retry-After` response header for the number of seconds to wait before retrying. |
 
-```json
-{
-  "error": {
-    "code": "validation/missing_action",
-    "message": "The 'action' field is required.",
-    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
-    "doc_url": "https://docs.auditrails.io/reference/error-codes"
-  }
-}
-```
-
-### 401 Unauthorized
-
-```json
-{
-  "error": {
-    "code": "auth/key_not_found",
-    "message": "API key not found. Verify the key is correct or generate a new one in the dashboard.",
-    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
-    "doc_url": "https://docs.auditrails.io/reference/error-codes"
-  }
-}
-```
-
-### 409 Conflict — Idempotency Key Reused
-
-```json
-{
-  "error": {
-    "code": "event/idempotency_key_conflict",
-    "message": "This Idempotency-Key was already used with a different request body.",
-    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
-    "doc_url": "https://docs.auditrails.io/reference/error-codes"
-  }
-}
-```
-
-### 429 Too Many Requests
-
-```json
-{
-  "error": {
-    "code": "rate/limit_exceeded",
-    "message": "Rate limit exceeded. Please retry after the duration specified in the Retry-After header.",
-    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
-    "doc_url": "https://docs.auditrails.io/reference/error-codes"
-  }
-}
-```
-
-The response includes a `Retry-After` header indicating how many seconds to wait. See [Rate Limits](/api-reference/rate-limits) for the full picture — plan limits, the separate test-key pool, and the per-IP limit.
+<Warning>
+  A `429` response includes a `Retry-After` header indicating how many seconds to wait. Retrying before that window elapses will continue to return `429` and may extend your back-off period. Use the `Idempotency-Key` header on retries to ensure the event is only written once when the request eventually succeeds.
+</Warning>

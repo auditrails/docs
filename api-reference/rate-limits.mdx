@@ -1,101 +1,113 @@
 ---
-title: Rate Limits
-description: Per-plan rate limits, response headers, and handling 429 errors.
+title: "API Rate Limits — AuditRails API Reference"
+sidebarTitle: "Rate Limits"
+description: "Understand AuditRails' three-tier rate limiting model, how 429 responses work, and how to build clients that handle limits gracefully."
 ---
 
-# Rate Limits
+AuditRails enforces rate limits to ensure fair, stable throughput for all customers. There are three independent limit tiers applied in sequence on every request. Exceeding any single tier returns a `429 Too Many Requests` response — understanding each tier helps you stay well within bounds and design resilient integrations.
 
-AuditRails enforces rate limits using a **fixed-window** algorithm (one window per second). There are three independent limits, checked in this order:
+---
 
-## 1. Per-IP Limit
+## The Three Tiers
 
-Applied to every request, before authentication, regardless of API key: **100 req/s per source IP**. Returns `rate/ip_limit_exceeded` when exceeded.
+| Tier | Scope | Limit | Window | Notes |
+|---|---|---|---|---|
+| **Per-IP** | All traffic, unauthenticated or not | 100 req/s | 1 second (fixed) | Applied before authentication; protects against unauthenticated floods. |
+| **Per-plan (live keys)** | Requests using `at_live_` keys | 1,000 req/s | 1 second (fixed) | Default limit; applies to your entire plan across all live keys. |
+| **Test keys** | Requests using `at_test_` keys | 60 req/s | 1 second (fixed) | Shared pool across all AuditRails test-key users; not for production. |
 
-## 2. Per-Plan Limit (live keys)
+All windows are **fixed-window, 1-second** intervals. Counters reset at the top of each second — there is no rolling window or token-bucket smoothing.
 
-Applied per organization, based on your subscription plan:
+<Note>
+  A `POST /v1/events/batch` request counts as **one request** against all tiers, regardless of how many events are in the payload (up to the 100-event maximum). Batching is the most efficient way to ingest high volumes while staying within limits.
+</Note>
 
-| Plan | Requests/sec |
-|------|-------------|
-| **Starter Trails** | 1,000 |
-| **Framework Trails** | 1,000 |
-| **Compliance Trails** | 1,000 |
+---
 
-Check the dashboard's Billing page for your exact current limit — it's admin-configurable and may not match this table for every tenant. Returns `rate/limit_exceeded` when exceeded.
+## 429 Response & Retry-After
 
-<Info>
-Batch requests (`POST /v1/events/batch`) count as **one request** regardless of how many events are in the batch (up to 100). Use batch ingestion to maximize throughput.
-</Info>
+When you exceed a rate limit, AuditRails responds with HTTP `429 Too Many Requests` and a `Retry-After` header indicating how many seconds to wait before retrying.
 
-## 3. Test-Key Limit
-
-`at_test_…` keys draw from their own separate, plan-independent pool — **60 req/s by default** — instead of the per-plan limit above. Returns `rate/test_limit_exceeded` when exceeded. Never use a test key for production load or a load test.
-
-## No Rate-Limit Headers on Success
-
-Unlike some APIs, AuditRails does **not** return `X-RateLimit-Limit`/`X-RateLimit-Remaining`/`X-RateLimit-Reset` headers on successful responses. The only rate-limit-related header is `Retry-After`, and it's only present on `429` responses.
-
-## 429 Too Many Requests
-
-When you exceed any of the three limits above, the API returns a `429` status code with a `Retry-After` header:
-
-### Response Headers
-
-```
+```http
+HTTP/1.1 429 Too Many Requests
 Retry-After: 1
-```
+Content-Type: application/json
 
-### Response Body
-
-```json
 {
   "error": {
-    "code": "rate/limit_exceeded",
-    "message": "Starter Trails plan: 1000 req/s limit exceeded. Retry after the Retry-After duration.",
-    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
+    "code": "rate_limit/exceeded",
+    "message": "You have exceeded the rate limit for this key. Retry after 1 second.",
+    "request_id": "req_01HX7YGBFZ3QK8N9VMJT5RPCE4",
     "doc_url": "https://docs.auditrails.io/reference/error-codes"
   }
 }
 ```
 
-`code` will be `rate/ip_limit_exceeded` or `rate/test_limit_exceeded` instead, depending on which limit was hit — see [Error Codes](/reference/error-codes).
+<Info>
+  AuditRails does **not** include `X-RateLimit-Limit`, `X-RateLimit-Remaining`, or `X-RateLimit-Reset` headers on successful responses. Use the `Retry-After` header on 429 responses to drive your back-off logic.
+</Info>
 
-## Handling Rate Limits
+---
 
-### Recommended Strategy
+## Handling Rate Limits in Your Code
 
-1. **Respect `Retry-After`** -- wait the specified number of seconds before retrying
-2. **Use exponential backoff** -- if retries continue to fail, increase the wait time
-3. **Use batch ingestion** -- `POST /v1/events/batch` sends up to 100 events in a single request
-4. **Use a live key for anything beyond light testing** -- test keys share a much smaller pool than your plan's live limit
+### Respect Retry-After
 
-### SDK Behavior
+Always parse the `Retry-After` header value (in seconds) and wait at least that long before resending a request. A value of `1` is typical given the 1-second fixed window.
 
-All official SDKs handle rate limits automatically:
+```python
+import time, requests
 
-- Automatic retry with exponential backoff
-- Configurable retry count (default: 3 retries)
-- Background batching to minimize request count
-
-### Example: Manual Retry with Backoff
-
-```bash
-# If you get a 429, wait and retry
-curl -X POST https://api.auditrails.io/v1/events \
-  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
-  -H "Content-Type: application/json" \
-  -d '{"action": "user.login", "actor_id": "user_123"}'
-
-# Response: 429 with Retry-After: 1
-# Wait 1 second, then retry
-sleep 1
-
-curl -X POST https://api.auditrails.io/v1/events \
-  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
-  -H "Content-Type: application/json" \
-  -d '{"action": "user.login", "actor_id": "user_123"}'
+def post_event(payload, api_key):
+    while True:
+        response = requests.post(
+            "https://api.auditrails.io/v1/events",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+        )
+        if response.status_code == 429:
+            retry_after = int(response.headers.get("Retry-After", 1))
+            time.sleep(retry_after)
+            continue
+        response.raise_for_status()
+        return response.json()
 ```
 
-## Need Higher Limits?
+### Use Batch Ingestion
 
-For higher throughput requirements, [contact sales](https://auditrails.io/contact) to discuss custom limits.
+If you are sending many events in a tight loop, switch to `POST /v1/events/batch`. A single batch request of 100 events consumes only 1 request from your per-plan quota — a 100× improvement in throughput efficiency.
+
+```bash
+curl -X POST https://api.auditrails.io/v1/events/batch \
+  -H "Authorization: Bearer at_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "events": [
+      { "action": "user.login",  "actor_id": "user_001" },
+      { "action": "user.logout", "actor_id": "user_002" }
+    ]
+  }'
+```
+
+### SDK Auto-Retry
+
+All official AuditRails SDKs automatically retry `5xx` server errors with **exponential back-off**. While SDKs do not automatically retry `429` responses (to avoid thundering-herd issues), they surface the `Retry-After` value so you can implement the wait loop shown above.
+
+<Warning>
+  Do not implement aggressive retry loops without honouring `Retry-After`. Hammering the API after a 429 prolongs the window in which your requests are being dropped and may trigger stricter protective limits.
+</Warning>
+
+---
+
+## Increasing Your Limits
+
+Default plan limits cover the vast majority of production workloads. If you have a use case that requires sustained throughput above 1,000 req/s on live keys, contact the AuditRails sales team to discuss a custom plan.
+
+<CardGroup cols={2}>
+  <Card title="Talk to Sales" icon="phone" href="https://auditrails.io/contact-sales">
+    Request a higher rate limit or discuss an enterprise plan tailored to your ingestion volume.
+  </Card>
+  <Card title="Batch Ingestion" icon="layer-group" href="/api-reference/post-events-batch">
+    Learn how to structure batch payloads and maximise throughput within your existing limits.
+  </Card>
+</CardGroup>

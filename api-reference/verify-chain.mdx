@@ -1,67 +1,90 @@
 ---
-title: Verify Hash Chain
-description: Verify the integrity of your project's cryptographic hash chain.
-api: GET /v1/events/verify
+title: "Verify Hash Chain — AuditRails API Reference"
+sidebarTitle: "Verify Chain"
+description: "Cryptographically verify the tamper-evident SHA-256 hash chain across a range of audit log events to detect unauthorized modifications."
 ---
 
-# Verify Hash Chain
+The Verify Hash Chain endpoint gives you a way to independently confirm that your audit log has not been tampered with. For every event in the requested sequence range, AuditRails recomputes the expected SHA-256 hash from the canonical payload and checks that each event's `prev_hash` matches the hash of the event immediately before it. If every event in the range passes both checks, the response reports `valid: true`. If any event fails, the response pinpoints the first broken link in the chain.
 
-Verify the integrity of your project's hash chain over a range of chain sequence numbers. This endpoint recomputes hashes for each event and checks that `prev_hash` linkage is unbroken.
+## Endpoint
 
-If any event has been tampered with, the chain breaks and the response identifies where.
+```
+GET https://api.auditrails.io/v1/events/verify
+```
+
+## How Verification Works
+
+For each event in the requested range, AuditRails performs two checks:
+
+1. **Hash recomputation** — Recomputes `SHA-256(prev_hash + canonical_payload + timestamp)` and compares the result to the stored `hash`. A mismatch means the event's content has been altered after it was written.
+2. **Chain continuity** — Confirms that the event's `prev_hash` matches the `hash` of the preceding event. A mismatch means an event was deleted, inserted, or reordered.
+
+The **canonical payload** used for recomputation includes: `log_id`, `tenant_id`, `action`, `actor_id`, `resource`, and `metadata`. The fields `country`, `city`, `ip_address`, and all chain fields (`chain_seq`, `prev_hash`, `hash`) are intentionally excluded from the canonical payload.
 
 ## Query Parameters
 
 <ParamField query="from_seq" type="integer" default="1">
-  Starting chain sequence number (not a timestamp).
+  The `chain_seq` of the first event to include in verification. Defaults to `1` (the very first event in the project).
 </ParamField>
 
 <ParamField query="to_seq" type="integer">
-  Ending chain sequence number, inclusive (not a timestamp). Defaults to `from_seq + 1000` if omitted.
+  The `chain_seq` of the last event to include. If omitted, defaults to `from_seq + 1000`. You cannot verify more than 1000 events in a single request — for larger ranges, page through in successive calls.
 </ParamField>
 
-## Response
+## Response Fields
 
-<ResponseField name="valid" type="boolean">
-  `true` if the hash chain is intact over the specified range.
+<ResponseField name="valid" type="boolean" required>
+  `true` if every event in the range passed both the hash recomputation check and the chain continuity check. `false` if any event failed.
 </ResponseField>
 
-<ResponseField name="checked" type="integer">
-  Number of events verified in the range.
+<ResponseField name="checked" type="integer" required>
+  Total number of events verified in this response. When `valid` is `false`, this reflects the count of events examined up to and including the first broken event.
 </ResponseField>
 
-<ResponseField name="first_seq" type="integer">
-  First chain sequence number checked.
+<ResponseField name="first_seq" type="integer" required>
+  The `chain_seq` of the first event that was verified, echoing your `from_seq` input.
 </ResponseField>
 
-<ResponseField name="last_seq" type="integer">
-  Last chain sequence number checked.
+<ResponseField name="last_seq" type="integer" required>
+  The `chain_seq` of the last event that was verified. When `valid` is `true` this equals your effective `to_seq`. When `valid` is `false` this equals `broken_at`.
 </ResponseField>
 
 <ResponseField name="broken_at" type="integer">
-  Present only when `valid` is `false` — the chain sequence number where tampering was detected.
+  The `chain_seq` of the first event that failed verification. Only present when `valid` is `false`.
 </ResponseField>
 
 <ResponseField name="broken_hash" type="string">
-  Present only when `valid` is `false` — the stored hash of the broken entry.
+  The stored `hash` value of the event at `broken_at`. Only present when `valid` is `false`. Compare this against a trusted copy of the event to determine whether the hash or the payload was modified.
 </ResponseField>
 
+<Warning>
+  **A broken chain is a critical security finding.** If `valid` is `false`, take these steps immediately:
+
+  1. **Export and preserve** the full verification response, including `broken_at` and `broken_hash`.
+  2. **Do not modify or delete** any events in your project until the investigation is complete.
+  3. **Fetch the affected event** using [Get Single Event](/api-reference/get-event) and compare its fields to your own application's records or backups.
+  4. **Investigate upstream** whether the tampering occurred in your ingestion pipeline, a third-party integration, or at the storage layer.
+  5. **Contact AuditRails support** with the `X-Request-Id` header value from the verify response for platform-level assistance.
+</Warning>
+
 <Note>
-There's no `request_id` in the response body for this endpoint — use the `X-Request-Id` response header for tracing.
+  A single verify request covers at most 1000 events. To verify a larger chain, issue successive requests by advancing `from_seq` and `to_seq` in 1000-event increments. If you find a broken chain in a range, you can narrow the exact failure point by bisecting with smaller sub-ranges.
 </Note>
 
-## Examples
+<Note>
+  The response body does not include a `request_id` field. Use the `X-Request-Id` response header to correlate this verification run with your internal audit records or a support case.
+</Note>
 
-### curl
+## Example Request
 
 ```bash
 curl -G https://api.auditrails.io/v1/events/verify \
-  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Authorization: Bearer at_live_xxx" \
   -d "from_seq=1" \
   -d "to_seq=5000"
 ```
 
-### 200 OK — Chain Intact
+## Example Response — Chain Intact
 
 ```json
 {
@@ -72,7 +95,7 @@ curl -G https://api.auditrails.io/v1/events/verify \
 }
 ```
 
-### 200 OK — Tamper Detected
+## Example Response — Tampering Detected
 
 ```json
 {
@@ -85,19 +108,34 @@ curl -G https://api.auditrails.io/v1/events/verify \
 }
 ```
 
-<Warning>
-A broken chain means at least one event has been modified after ingestion. This is a critical security finding. Export the verification result and investigate immediately.
-</Warning>
+## Verifying Large Chains
 
-## How Verification Works
+For projects with more than 1000 events, page through the chain in successive 1000-event windows:
 
-The verify endpoint performs two checks for each event in the range:
+```bash
+# Window 1: events 1–1000
+curl -G https://api.auditrails.io/v1/events/verify \
+  -H "Authorization: Bearer at_live_xxx" \
+  -d "from_seq=1" \
+  -d "to_seq=1000"
 
-1. **Hash recomputation** -- recomputes `SHA-256(prev_hash + canonical_payload + timestamp)` and compares it to the stored hash
-2. **Chain linkage** -- verifies that each event's `prev_hash` matches the preceding event's `hash`
+# Window 2: events 1001–2000
+curl -G https://api.auditrails.io/v1/events/verify \
+  -H "Authorization: Bearer at_live_xxx" \
+  -d "from_seq=1001" \
+  -d "to_seq=2000"
 
-The canonical payload includes: `log_id`, `tenant_id`, `action`, `actor_id`, `resource`, and `metadata`. Worker-enriched fields (`country`, `city`, `ip_address`, and the chain fields themselves) are excluded from the hash computation.
+# Window 3: events 2001–3000
+curl -G https://api.auditrails.io/v1/events/verify \
+  -H "Authorization: Bearer at_live_xxx" \
+  -d "from_seq=2001" \
+  -d "to_seq=3000"
+```
 
-<Note>
-Verification is computationally intensive for large ranges — 1,000 sequences is the default and a reasonable page size. For a full-history check, page through with successive `from_seq`/`to_seq` ranges rather than requesting your entire chain at once.
-</Note>
+Continue advancing the window until `has_more` in your event list confirms you've covered all events, or until a `valid: false` response signals a break in the chain.
+
+## Error Responses
+
+| Status | Code | Description |
+|--------|------|-------------|
+| `401` | `auth/key_not_found` | The API key provided in the `Authorization` header is missing or invalid. |

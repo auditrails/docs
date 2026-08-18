@@ -1,156 +1,243 @@
 ---
-title: GDPR Compliance
-description: How AuditRails handles GDPR — DPA, DSAR, data residency, and PII handling.
+title: "GDPR Compliance with AuditRails"
+sidebarTitle: "GDPR"
+description: "Configure AuditRails as a GDPR-compliant data processor: sign your DPA, handle DSARs, minimise PII in logs, and manage data residency."
 ---
 
-# GDPR Compliance
+Under GDPR, AuditRails acts as your **data processor** — it processes personal data on your behalf according to your instructions. You remain the **data controller**, responsible for determining the purpose and means of processing. This guide walks you through signing your Data Processing Agreement, handling Data Subject Access Requests, minimising PII in your logs, and configuring data residency.
 
-AuditRails is designed for GDPR compliance from the ground up. This guide covers our obligations as a data processor and how to use AuditRails in a GDPR-compliant way.
+## Data Processing Agreement (DPA)
 
-## AuditRails as a Data Processor
+Before processing any personal data through AuditRails, you must have a signed DPA in place. The DPA is available directly in your dashboard — no back-and-forth with a sales team required.
 
-When you use AuditRails, you are the **data controller** and AuditRails is the **data processor**. We process audit log data on your behalf, which may contain personal data (actor IDs, IP addresses, metadata).
+<Steps>
+  <Step title="Navigate to Legal settings">
+    Go to **Dashboard → Settings → Legal**.
+  </Step>
+  <Step title="Review the DPA">
+    Read through the agreement. The DPA covers the nature and purpose of processing, categories of personal data and data subjects, the list of sub-processors, EU Standard Contractual Clauses (SCCs), and breach notification obligations.
+  </Step>
+  <Step title="Sign and download">
+    Click **Sign DPA** to apply your electronic signature. Download the signed PDF and store it with your compliance records.
+  </Step>
+</Steps>
 
-### Data Processing Agreement (DPA)
-
-Every paid AuditRails account includes a GDPR-compliant DPA. You can:
-
-1. **Review and sign** the DPA in **Dashboard → Settings → Legal**
-2. **Download** a signed PDF for your records
-3. **Auto-renewal** — the DPA is updated when our processing terms change, with 30-day notice
-
-The DPA covers:
-- Nature and purpose of processing
-- Types of personal data processed
-- Data subject categories
-- Sub-processor list
-- Data transfer mechanisms (EU SCCs)
-- Data breach notification obligations
+The DPA renews automatically. You will receive **30 days' notice** before any material changes, giving you time to review and object before renewal takes effect.
 
 ### Sub-Processors
 
-| Sub-Processor | Service | Location | DPA |
-|--------------|---------|----------|-----|
-| AWS | Audit log storage and message queue (S3, SQS) | US / EU | [AWS DPA](https://aws.amazon.com/compliance/data-processing-addendum/) |
-| Stripe | Payment processing | US | [Stripe DPA](https://stripe.com/legal/dpa) |
-| MaxMind | Geo-IP enrichment | US | [MaxMind DPA](https://www.maxmind.com/en/privacy-policy) |
+AuditRails uses the following sub-processors:
 
-We notify customers 30 days before adding new sub-processors.
+| Sub-processor | Service | Region |
+|---------------|---------|--------|
+| AWS (S3, SQS) | Storage and message queuing | US and EU |
+| Stripe | Payment processing | US |
+| MaxMind | Geo-IP enrichment | US |
 
-## Data Subject Rights
+You will receive **30 days' notice** before any new sub-processor is added. If you object to a new sub-processor, contact support before the notice period expires.
 
-### Right of Access (Art. 15) & Data Portability (Art. 20)
-
-Use the DSAR Export API to extract all data for a specific actor:
-
-```bash
-curl -X POST https://api.auditrails.io/v1/dsar/export \
-  -H "Authorization: Bearer at_live_..." \
-  -H "Content-Type: application/json" \
-  -d '{"actor_id": "user_123"}'
-```
-
-This queries all storage layers (hot + cold) and returns a downloadable ZIP with CSV files.
-
-### Right to Erasure (Art. 17)
-
-Use the DSAR Delete API to request deletion:
-
-```bash
-curl -X POST https://api.auditrails.io/v1/dsar/delete \
-  -H "Authorization: Bearer at_live_..." \
-  -H "Content-Type: application/json" \
-  -d '{"actor_id": "user_123", "reason": "Data subject request"}'
-```
-
-<Warning>
-**WORM storage limitation:** S3 Object Lock prevents deletion of cold storage data before the retention period expires. This is documented in the DPA. Hot storage (ClickHouse) data is soft-deleted immediately.
-</Warning>
-
-### Managing DSARs via Dashboard
-
-1. Go to **Dashboard → Settings → Data Requests**
-2. Click **New Request**
-3. Enter the actor ID and request type (export/delete)
-4. Track status: Pending → Processing → Complete
-5. Download results or view deletion confirmation
-
-## PII Handling Best Practices
-
-### What to Log
-
-```typescript
-// Good — log identifiers, not PII
-audit.log({
-  action: 'user.updated',
-  actorId: 'user_123',          // Internal ID, not email
-  resource: 'profile/user_123',
-  metadata: {
-    fields_changed: ['name', 'email'],  // Field names, not values
-    changed_by: 'admin_456',
-  },
-});
-```
-
-### What NOT to Log
-
-```typescript
-// Bad — contains PII in metadata
-audit.log({
-  action: 'user.updated',
-  actorId: 'john@example.com',     // Don't use email as actor ID
-  metadata: {
-    old_email: 'john@example.com',  // Don't log PII values
-    new_email: 'john2@example.com',
-    ssn: '123-45-6789',             // Never log sensitive data
-  },
-});
-```
-
-### IP Anonymization
-
-Enable IP anonymization to truncate the last octet before storage:
-
-- `203.0.113.45` → `203.0.113.0`
-- Configure in **Dashboard → Settings → Privacy**
-- Applies to all future events (existing events are not retroactively modified)
-
-### Metadata Redaction
-
-Configure field-level redaction rules to automatically strip sensitive fields:
-
-- Set up in **Dashboard → Settings → Privacy → Redaction Rules**
-- Example: redact any metadata field named `email`, `phone`, `ssn`
-- Redacted fields are replaced with `[REDACTED]` before storage
-
-## Data Residency
-
-| Plan | Available Regions |
-|------|------------------|
-| Developer / Starter / Pro | US (us-east-1) |
-| Enterprise | US (us-east-1) or EU (eu-west-1) |
-
-Enterprise customers can deploy to EU-only infrastructure for full data residency compliance.
-
-## Breach Notification
-
-In the event of a data breach affecting your audit logs, AuditRails will:
-
-1. **Notify you within 48 hours** of becoming aware of the breach (DPA requirement)
-2. Provide details: nature of breach, data affected, mitigation steps
-3. Cooperate with your notification obligations to supervisory authorities (Art. 33) and data subjects (Art. 34)
+---
 
 ## Compliance Checklist
 
-Use the built-in GDPR compliance checklist in **Dashboard → Compliance → GDPR** to track:
+The GDPR compliance checklist gives you a live view of your status against the key GDPR obligations. Open it at **Dashboard → Compliance → GDPR**.
 
-- Data protection principles implementation
-- Lawful basis documentation
-- Data subject rights procedures
-- DPO appointment
-- DPIA completion
-- Breach notification procedures
-- International transfer safeguards
-- Security measures
+The checklist tracks:
 
-Auto-verification checks whether you're logging the required GDPR events.
+| Category | Items tracked |
+|----------|--------------|
+| Data protection principles | Art.5 accountability, purpose limitation, data minimisation |
+| Lawful basis | Consent logging, legitimate interest records |
+| DSAR procedures | Export and deletion workflows configured |
+| DPO appointment | Data Protection Officer designation (if required) |
+| DPIA | Data Protection Impact Assessment completion |
+| Breach notification | Breach event types configured, 48-hour notification |
+| International transfers | SCCs in DPA, sub-processor regions |
+| Security measures | Hash chaining, WORM, encryption, access controls |
+
+---
+
+## Data Subject Access Requests (DSARs)
+
+GDPR Articles 15–20 give individuals the right to access, export, and delete their personal data. AuditRails provides a built-in DSAR workflow. Only **admin users** can submit DSAR requests.
+
+### DSAR Export (Art.15 / Art.20)
+
+<Steps>
+  <Step title="Open the DSAR panel">
+    Navigate to **Dashboard → Settings → DSAR** and click **New Request**.
+  </Step>
+  <Step title="Enter the actor ID">
+    Enter the `actor_id` that corresponds to the data subject. This is the identifier you use when logging events (for example, `user_123`).
+  </Step>
+  <Step title="Select Export type">
+    Choose **Export** as the request type.
+  </Step>
+  <Step title="Download the export">
+    AuditRails compiles all events associated with that `actor_id` into a ZIP file containing a CSV. Download it and provide it to the data subject.
+  </Step>
+</Steps>
+
+### DSAR Delete (Art.17)
+
+<Steps>
+  <Step title="Open the DSAR panel">
+    Navigate to **Dashboard → Settings → DSAR** and click **New Request**.
+  </Step>
+  <Step title="Enter the actor ID">
+    Enter the `actor_id` of the data subject requesting erasure.
+  </Step>
+  <Step title="Select Delete type">
+    Choose **Delete** as the request type and confirm.
+  </Step>
+</Steps>
+
+<Warning>
+  **Hot storage records are deleted immediately.** S3 WORM (cold storage) records **cannot be physically deleted** before the retention period expires — they are S3 Object Lock COMPLIANCE objects, which are immutable by design. Records in WORM storage are **logically marked as deleted** and excluded from all reads, API responses, and exports immediately upon the request being processed. Physical deletion occurs automatically when the Object Lock expires.
+
+  This behaviour is permitted under **GDPR Art.17(3)(e)**, which allows retention of data necessary for the establishment, exercise, or defence of legal claims. Your DPA documents this legal basis.
+</Warning>
+
+**CCPA note:** If you are also subject to CCPA/CPRA, deletion requests must be actioned within **45 days**. The DSAR workflow logs a `data.deleted` event with a timestamp so you can demonstrate compliance with this deadline.
+
+---
+
+## PII Best Practices
+
+Minimising personal data in your audit logs is the most effective way to reduce GDPR risk. The less PII you log, the less you need to manage.
+
+### Use Identifiers, Not PII
+
+<CodeGroup>
+  ```javascript Good — log an identifier
+  auditRails.log({
+    action: 'document.viewed',
+    actorId: 'user_123',        // internal ID, not PII
+    resource: 'document/456',
+  });
+  ```
+
+  ```javascript Bad — logs PII directly
+  auditRails.log({
+    action: 'document.viewed',
+    actorId: 'john@example.com',  // ❌ email address is PII
+    resource: 'document/456',
+  });
+  ```
+</CodeGroup>
+
+### Log Field Names, Not Values
+
+When recording what changed, log the names of changed fields — not their new values.
+
+<CodeGroup>
+  ```javascript Good — field names only
+  auditRails.log({
+    action: 'profile.updated',
+    actorId: 'user_123',
+    metadata: {
+      fields_changed: ['name', 'email'],  // ✅ names only
+    },
+  });
+  ```
+
+  ```javascript Bad — logs PII values
+  auditRails.log({
+    action: 'profile.updated',
+    actorId: 'user_123',
+    metadata: {
+      new_email: 'john@example.com',  // ❌ PII value
+      new_name: 'John Smith',         // ❌ PII value
+    },
+  });
+  ```
+</CodeGroup>
+
+### Never Log Sensitive Data
+
+Avoid logging any of the following in event metadata:
+
+- Passwords or password hashes
+- Social Security Numbers (SSNs) or national ID numbers
+- Full payment card numbers (PANs)
+- Biometric data
+- Health or medical information
+- Unmasked API keys or secrets
+
+### IP Anonymization
+
+If you process EU user IP addresses, consider enabling IP anonymization to truncate the last octet before storage.
+
+<Steps>
+  <Step title="Navigate to Privacy settings">
+    Go to **Dashboard → Settings → Privacy**.
+  </Step>
+  <Step title="Enable IP Anonymization">
+    Toggle **IP Anonymization** on. AuditRails will truncate the last octet of every IP address going forward.
+
+    **Example:** `203.0.113.45` → `203.0.113.0`
+  </Step>
+</Steps>
+
+<Info>
+  IP anonymization applies to **future events only**. Events already stored retain their original IP addresses. If you need to anonymise historical data, contact support.
+</Info>
+
+### Metadata Redaction Rules
+
+Redaction rules automatically strip known PII field names from event metadata before storage, replacing their values with `[REDACTED]`.
+
+<Steps>
+  <Step title="Navigate to Redaction Rules">
+    Go to **Dashboard → Settings → Privacy → Redaction Rules**.
+  </Step>
+  <Step title="Configure field names to redact">
+    AuditRails pre-populates common PII field names: `email`, `phone`, `ssn`. Add any additional field names that may appear in your metadata.
+  </Step>
+  <Step title="Verify redaction">
+    Log a test event containing a redacted field name and confirm the value appears as `[REDACTED]` in the dashboard.
+  </Step>
+</Steps>
+
+<Tip>
+  Redaction rules are a safety net — not a substitute for good instrumentation. Design your logging to avoid PII in the first place; use redaction rules to catch anything that slips through.
+</Tip>
+
+---
+
+## Data Residency
+
+| Plan | Storage region |
+|------|---------------|
+| Developer | `us-east-1` (Northern Virginia, USA) |
+| Starter | `us-east-1` (Northern Virginia, USA) |
+| Pro | `us-east-1` (Northern Virginia, USA) |
+| Enterprise | `us-east-1` or `eu-west-1` (Ireland, EU) |
+
+If your GDPR obligations require that personal data not leave the EU, you need an **Enterprise plan** with EU storage (`eu-west-1`) enabled. Contact your account manager to configure EU-only storage.
+
+<Info>
+  AWS `eu-west-1` (Ireland) is an EU jurisdiction for GDPR purposes. Data stored there does not transfer outside the EU/EEA under normal operation. The DPA's EU SCCs cover the residual transfer risk associated with US-based sub-processors (Stripe, MaxMind) that do not store audit event data.
+</Info>
+
+---
+
+## Breach Notification
+
+If AuditRails becomes aware of a security incident affecting your data, we will notify you **within 48 hours** of becoming aware of the breach. This supports your own 72-hour notification obligation to your supervisory authority under GDPR Art.33.
+
+To log breach-related events from your own application:
+
+```javascript
+auditRails.log({
+  action: 'breach.detected',
+  actorId: 'system',
+  resource: 'security/incident-2024-001',
+  metadata: {
+    affected_systems: ['auth-service'],
+    detected_at: new Date().toISOString(),
+  },
+});
+```
+
+Log `breach.notified` when you notify your supervisory authority, and `breach.resolved` when the incident is closed. These events are tracked by the GDPR compliance checklist and satisfy Art.33 documentation requirements.

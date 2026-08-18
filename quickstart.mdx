@@ -1,144 +1,192 @@
 ---
-title: Quickstart
-description: Go from zero to your first audit event in under 2 minutes.
+title: "Quickstart — Log Your First Event in 5 Minutes"
+sidebarTitle: "Quickstart"
+description: "Create a free AuditRails account, install your language's SDK, and send your first tamper-proof audit event in under five minutes. No credit card required."
 ---
 
-# Quickstart
+This guide walks you from zero to your first tamper-proof audit event. You'll create a free account, grab an API key, install the SDK for your language, and send a real event that you can immediately inspect in the AuditRails dashboard. The entire process takes about five minutes.
 
-Follow these steps to start logging audit events with AuditRails.
+<Steps>
 
-## 1. Create an Account
+  <Step title="Create Your Free Account">
+    Head to [app.auditrails.io/register](https://app.auditrails.io/register) and sign up for a free account. You get a **60-day free trial** with no credit card required — full platform access from day one.
 
-Sign up at [app.auditrails.io/register](https://app.auditrails.io/register) and pick a plan — every plan starts with a 60-day free trial, no credit card required.
+    <Tip>
+      Your account starts on the Developer plan. You can upgrade at any time from **Dashboard → Billing** without losing any existing log data.
+    </Tip>
+  </Step>
 
-## 2. Get Your API Key
+  <Step title="Create an API Key">
+    Every event is authenticated with an API key scoped to a project. To create one:
 
-1. Go to **Dashboard → API Keys**
-2. Click **Create API Key**
-3. Copy the key (starts with `at_live_...`) — it's only shown once
+    1. Open the [AuditRails Dashboard](https://app.auditrails.io).
+    2. Navigate to **API Keys** in the left sidebar.
+    3. Click **Create API Key**, give it a name (e.g. `my-app-dev`), and select the project you want to scope it to.
+    4. Copy the key immediately — it starts with `at_live_...` and is **shown only once**.
 
-## 3. Install an SDK
+    <Warning>
+      AuditRails stores only a SHA-256 hash of your key, never the raw value. If you lose it, you must revoke it and create a new one. Store it in a secrets manager or environment variable right away.
+    </Warning>
+  </Step>
 
-<CodeGroup>
+  <Step title="Install the SDK">
+    Choose the package for your language and runtime:
 
-```bash npm
-npm install @auditrails/node
-```
+    <CodeGroup>
 
-```bash composer
-composer require auditrails/auditrails-php
-```
+    ```bash Node.js
+    npm install @auditrails/node
+    ```
 
-```bash pip
-pip install auditrails
-```
+    ```bash PHP
+    composer require auditrails/auditrails-php
+    ```
 
-```bash go
-go get github.com/auditrails/auditrails-go
-```
+    ```bash Python
+    pip install auditrails
+    ```
 
-```xml maven
-<dependency>
-    <groupId>io.auditrails</groupId>
-    <artifactId>auditrails-java</artifactId>
-    <version>1.0.0</version>
-</dependency>
-```
+    ```bash Go
+    go get github.com/auditrails/auditrails-go
+    ```
 
-</CodeGroup>
+    ```xml Java (Maven)
+    <dependency>
+      <groupId>io.auditrails</groupId>
+      <artifactId>auditrails-java</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+    ```
 
-## 4. Log Your First Event
+    </CodeGroup>
+  </Step>
 
-<CodeGroup>
+  <Step title="Log Your First Event">
+    Initialize the client with your API key and send a `user.login` event. Replace `at_live_...` with the key you copied in step 2.
 
-```typescript Node.js
-import { AuditRails } from '@auditrails/node';
+    <CodeGroup>
 
-const audit = new AuditRails({ apiKey: 'at_live_...' });
+    ```javascript Node.js
+    import { AuditRails } from '@auditrails/node';
 
-audit.log({
-  action: 'user.login',
-  actorId: 'user_123',
-  resource: 'session/sess_abc',
-  metadata: { ip: '203.0.113.1', method: 'password' },
-});
-```
+    const audit = new AuditRails({ apiKey: 'at_live_...' });
 
-```php PHP
-use AuditRails\AuditRails;
-use AuditRails\AuditEvent;
-use AuditRails\Config;
-use GuzzleHttp\Client;
-use GuzzleHttp\Psr7\HttpFactory;
+    await audit.log({
+      action: 'user.login',
+      actorId: 'user_123',
+      resource: 'session/sess_abc',
+      metadata: {
+        ip: '203.0.113.1',
+        method: 'password',
+      },
+    });
+    ```
 
-$audit = new AuditRails(
-    new Config(apiKey: 'at_live_...'),
-    new Client(),
-    new HttpFactory(),
-    new HttpFactory()
-);
+    ```php PHP
+    use AuditRails\AuditRails;
 
-$audit->log(new AuditEvent(
-    action: 'user.login',
-    actorId: 'user_123',
-    resource: 'session/sess_abc',
-    metadata: ['ip' => '203.0.113.1', 'method' => 'password'],
-));
-```
+    $audit = new AuditRails(
+        new Config(apiKey: 'at_live_...'),
+        new Client(),
+        new HttpFactory(),
+        new HttpFactory()
+    );
 
-```python Python
-from auditrails import AuditRails, AuditRailsConfig
+    $audit->log(new AuditEvent(
+        action: 'user.login',
+        actorId: 'user_123',
+        resource: 'session/sess_abc',
+        metadata: ['ip' => '203.0.113.1', 'method' => 'password']
+    ));
+    ```
 
-audit = AuditRails(AuditRailsConfig(api_key='at_live_...'))
+    ```python Python
+    from auditrails import AuditRails, AuditRailsConfig
 
-audit.log({
-    'action': 'user.login',
-    'actor_id': 'user_123',
-    'resource': 'session/sess_abc',
-    'metadata': {'ip': '203.0.113.1', 'method': 'password'},
-})
-```
+    audit = AuditRails(AuditRailsConfig(api_key='at_live_...'))
 
-```go Go
-import auditrails "github.com/auditrails/auditrails-go"
+    audit.log({
+        'action': 'user.login',
+        'actor_id': 'user_123',
+        'resource': 'session/sess_abc',
+        'metadata': {
+            'ip': '203.0.113.1',
+            'method': 'password',
+        },
+    })
+    ```
 
-client, _ := auditrails.New("at_live_...", auditrails.Options{})
-defer client.Close()
+    ```go Go
+    package main
 
-client.Log(auditrails.Event{
-    Action:   "user.login",
-    ActorID:  "user_123",
-    Resource: "session/sess_abc",
-    Metadata: map[string]any{"ip": "203.0.113.1", "method": "password"},
-})
-```
+    import "github.com/auditrails/auditrails-go"
 
-```java Java
-import io.auditrails.AuditRails;
-import io.auditrails.AuditEvent;
+    func main() {
+        client, _ := auditrails.New("at_live_...", auditrails.Options{})
+        defer client.Close()
 
-try (AuditRails audit = AuditRails.builder("at_live_...").build()) {
-    audit.log(AuditEvent.builder("user.login")
-        .actorId("user_123")
-        .resource("session/sess_abc")
-        .metadata(Map.of("ip", "203.0.113.1", "method", "password"))
-        .build());
-}
-```
+        client.Log(auditrails.Event{
+            Action:   "user.login",
+            ActorID:  "user_123",
+            Resource: "session/sess_abc",
+            Metadata: map[string]any{
+                "ip":     "203.0.113.1",
+                "method": "password",
+            },
+        })
+    }
+    ```
 
-</CodeGroup>
+    ```java Java
+    import io.auditrails.AuditRails;
+    import io.auditrails.AuditEvent;
+    import java.util.Map;
 
-## 5. View in Dashboard
+    try (AuditRails audit = AuditRails.builder("at_live_...").build()) {
+        audit.log(
+            AuditEvent.builder("user.login")
+                .actorId("user_123")
+                .resource("session/sess_abc")
+                .metadata(Map.of(
+                    "ip", "203.0.113.1",
+                    "method", "password"
+                ))
+                .build()
+        );
+    }
+    ```
 
-Go to **Dashboard → Logs** to see your event. It's hash-chained and stored in WORM storage.
+    </CodeGroup>
 
-## What's Next?
+    <Info>
+      The SDK automatically attaches a `log_id` (ULID), your `tenant_id`, and a precise `timestamp` to every event before it is hashed and stored. You never need to set these manually.
+    </Info>
+  </Step>
+
+  <Step title="View Your Event in the Dashboard">
+    Open [Dashboard → Logs](https://app.auditrails.io/logs). Your `user.login` event should appear within a few seconds. Click any row to inspect:
+
+    - The full event payload and metadata
+    - The computed SHA-256 hash and its position in the chain
+    - The previous-hash link that proves chain integrity
+    - The WORM storage confirmation and retention expiry date
+  </Step>
+
+</Steps>
+
+## What's Next
 
 <CardGroup cols={2}>
   <Card title="Core Concepts" icon="lightbulb" href="/concepts">
-    Learn about tenants, projects, hash chains, and retention.
+    Understand projects, events, hash chains, storage tiers, and retention policies.
   </Card>
-  <Card title="SDK Docs" icon="code" href="/sdks/overview">
-    Full SDK reference with framework integration guides.
+  <Card title="Authentication" icon="key" href="/authentication">
+    Learn about API key formats, security best practices, and error codes.
+  </Card>
+  <Card title="API Reference" icon="terminal" href="/api-reference">
+    Explore every endpoint and field in the full REST API reference.
+  </Card>
+  <Card title="Compliance Guides" icon="clipboard-check" href="/guides/compliance-mapping">
+    See how AuditRails satisfies SOC 2, HIPAA, GDPR, PCI DSS, and 13 more frameworks.
   </Card>
 </CardGroup>

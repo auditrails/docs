@@ -1,81 +1,28 @@
 ---
-title: API Overview
-description: Base URL, authentication, headers, and conventions for the AuditRails REST API.
+title: "AuditRails API Reference Overview"
+sidebarTitle: "Overview"
+description: "A complete reference for the AuditRails REST API — ingest events, query audit logs, verify chain integrity, and explore the compliance action catalog."
 ---
 
-# API Overview
+The AuditRails API is a REST interface that lets you ingest tamper-proof audit events, retrieve and filter your log history, verify cryptographic chain integrity, and browse the compliance action catalog. All requests are made over HTTPS to the base URL `https://api.auditrails.io`, and every endpoint is versioned under `/v1/`. Request and response bodies use `application/json`.
 
-The AuditRails REST API lets you ingest, query, and verify tamper-proof audit events. All SDKs are thin wrappers around this API.
+<Info>
+  DSAR (Data Subject Access Request) workflows are available exclusively through the AuditRails dashboard and are not exposed via the bearer-token API.
+</Info>
 
 ## Base URL
 
 ```
-https://api.auditrails.io
+https://api.auditrails.io/v1
 ```
 
-All endpoints are versioned under `/v1/`.
+## Request & Response Conventions
 
-## Authentication
+Every request must include the `Content-Type: application/json` header alongside your `Authorization` header. Every response — including errors — contains an `X-Request-Id` header in `req_<ULID>` format. Hold on to this value when contacting support; it uniquely identifies the exact server-side transaction.
 
-Every request must include a Bearer token in the `Authorization` header:
+### Error Format
 
-```bash
-Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-See [Authentication](/api-reference/authentication) for details on API key formats and error handling.
-
-## Content Type
-
-All request and response bodies are JSON:
-
-```
-Content-Type: application/json
-```
-
-## Request IDs
-
-Every response includes an `X-Request-Id` header with a unique identifier in `req_ULID` format:
-
-```
-X-Request-Id: req_01HX7YGBFZ3QK8N9VMJT5RPCE4
-```
-
-Request IDs are also included in all error response bodies. Include this ID when contacting support to help us trace the request through our systems.
-
-## Rate Limiting
-
-Requests are rate-limited per second based on your subscription plan (all three live plans — Starter Trails, Framework Trails, Compliance Trails — currently default to 1,000 req/s; check your exact limit on the dashboard's Billing page). `at_test_…` keys draw from a separate, much smaller pool (60 req/s by default) instead of your plan's limit. There's also a per-IP limit (100 req/s) applied before authentication.
-
-A `429` response includes a `Retry-After` header (seconds to wait) — there are no `X-RateLimit-*` headers on successful responses. See [Rate Limits](/api-reference/rate-limits) for the full picture.
-
-## Endpoints
-
-### Ingestion
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | [`/v1/events`](/api-reference/post-events) | Log a single audit event |
-| `POST` | [`/v1/events/batch`](/api-reference/post-events-batch) | Log up to 100 events in one request |
-
-### Read
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | [`/v1/events`](/api-reference/get-events) | List events with filters |
-| `GET` | [`/v1/events/{log_id}`](/api-reference/get-event) | Get a single event with chain info |
-| `GET` | [`/v1/events/verify`](/api-reference/verify-chain) | Verify hash chain integrity |
-| `GET` | [`/v1/actions`](/api-reference/actions) | List the compliance action catalog |
-
-### DSAR (Data Subject Access Requests)
-
-<Note>
-DSAR is a **dashboard-only** feature today — there is no `at_live_…`-authenticated API endpoint for it. See [DSAR Export](/api-reference/dsar-export) for the real, session-authenticated flow through Settings.
-</Note>
-
-## Error Format
-
-All errors follow a consistent structure:
+When a request fails, AuditRails returns a structured error body so you always know what went wrong and where to learn more.
 
 ```json
 {
@@ -88,9 +35,67 @@ All errors follow a consistent structure:
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| `code` | Machine-readable, namespaced error code (e.g., `auth/key_not_found`, `validation/missing_action`) — see [Error Codes](/reference/error-codes) |
-| `message` | Human-readable description |
-| `request_id` | Unique request identifier for debugging |
-| `doc_url` | Link to the error-codes reference page |
+| Field | Type | Description |
+|---|---|---|
+| `code` | string | Machine-readable error code in `category/slug` format. |
+| `message` | string | Human-readable explanation of the error. |
+| `request_id` | string | The same ID present in the `X-Request-Id` response header. |
+| `doc_url` | string | Direct link to the relevant error-code documentation page. |
+
+---
+
+## Endpoint Catalog
+
+The table below lists every available endpoint grouped by functional category. Click an endpoint name to jump to its dedicated reference page.
+
+### Ingestion
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | [`/v1/events`](/api-reference/post-events) | Ingest a single audit event into your log. |
+| `POST` | [`/v1/events/batch`](/api-reference/post-events-batch) | Ingest a batch of up to 100 audit events in one request. |
+
+### Read & Query
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | [`/v1/events`](/api-reference/get-events) | List audit events with optional filters (actor, action, date range, and more). |
+| `GET` | [`/v1/events/{log_id}`](/api-reference/get-event) | Retrieve a single audit event by its unique log ID. |
+| `GET` | [`/v1/events/verify`](/api-reference/verify-chain) | Verify the cryptographic integrity of your audit chain. |
+
+### Compliance
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | [`/v1/actions`](/api-reference/actions) | Fetch the full compliance action catalog (standardised action slugs). |
+
+---
+
+## Quick-Start Example
+
+The snippet below ingests your first event in a single `curl` command. Replace `at_live_xxx` with your production API key.
+
+```bash
+curl -X POST https://api.auditrails.io/v1/events \
+  -H "Authorization: Bearer at_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "user.login",
+    "actor_id": "user_123"
+  }'
+```
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/api-reference/authentication">
+    Learn how API keys work, the difference between live and test keys, and how to handle auth errors.
+  </Card>
+  <Card title="Rate Limits" icon="gauge-high" href="/api-reference/rate-limits">
+    Understand per-IP, per-plan, and test-key rate limits, and how to handle 429 responses gracefully.
+  </Card>
+  <Card title="Error Codes" icon="circle-exclamation" href="/reference/error-codes">
+    Browse the full list of machine-readable error codes returned by the API.
+  </Card>
+  <Card title="SDKs" icon="code" href="/sdks">
+    Use an official AuditRails SDK to get automatic retries, typed responses, and more.
+  </Card>
+</CardGroup>

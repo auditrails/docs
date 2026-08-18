@@ -1,72 +1,140 @@
 ---
-title: Event Schema
-description: Complete field reference for AuditRails audit events.
+title: "Event Schema Reference: Fields & Structure"
+sidebarTitle: "Event Schema"
+description: "Complete reference for AuditRails event fields — what you send, what gets enriched, and how tamper-proof chain fields are computed."
 ---
 
-# Event Schema
+Every event you log to AuditRails passes through a two-stage pipeline: your input fields are validated and stored, then AuditRails enriches the record with identity, geolocation, and tamper-proof chain data before persisting it. Understanding this schema helps you design consistent action names, use metadata effectively, and verify chain integrity in your own tooling.
 
-## Input Fields (SDK / API)
+## Input Fields
 
-These fields are provided by your application when logging an event.
+These are the fields you provide when you log an event. Only `action` is required — everything else is optional but strongly recommended for useful audit trails.
 
-| Field | Type | Required | Max Length | Description |
-|-------|------|----------|-----------|-------------|
-| `action` | string | **Yes** | 255 chars | What happened. Use `resource.verb` format. Must be in the compliance action catalog or a custom action. |
-| `actor_id` | string | No | 255 chars | Who performed the action. Use internal IDs, not PII. |
-| `resource` | string | No | 255 chars | What was affected. Use `type/id` format. |
-| `metadata` | object | No | none enforced | Additional context as key-value pairs — see Metadata below. |
+<ParamField body="action" type="string" required>
+  The action that occurred, in `resource.verb` format. Maximum 255 characters. Must match an entry in the [compliance action catalog](#action-naming-convention) or be a registered custom action. This is the primary field used for filtering and compliance reporting.
+</ParamField>
+
+<ParamField body="actor_id" type="string">
+  The internal identifier of the entity that performed the action. Maximum 255 characters. Use stable internal IDs (e.g. `user_123`, `svc_payments`) — never PII such as email addresses or full names.
+</ParamField>
+
+<ParamField body="resource" type="string">
+  The object that was affected by the action, in `type/id` format (e.g. `document/doc-456`). Maximum 255 characters. Consistent formatting here makes resource-scoped queries significantly more powerful.
+</ParamField>
+
+<ParamField body="metadata" type="object">
+  Arbitrary key-value pairs that provide additional context for the event. No server-side key or depth restrictions are enforced, but the overall request body must stay within **256 KB** for single-event requests or **2 MB** for batch requests. Metadata is stored as-is and returned on every read — it is never indexed or transformed by AuditRails.
+</ParamField>
 
 ### Action Naming Convention
 
-Use dot-separated `resource.verb` format:
+AuditRails uses a `resource.verb` convention for action names. The table below lists the built-in actions across common compliance categories. You can register additional custom actions from the dashboard.
 
-```
-user.login          user.logout         user.created        user.deleted
-document.created    document.updated    document.deleted    document.shared
-api_key.created     api_key.revoked
-payment.processed   payment.refunded    payment.failed
-permission.granted  permission.revoked
-config.changed      deploy.completed
-```
+| Category | Actions |
+|---|---|
+| **User lifecycle** | `user.login` · `user.logout` · `user.created` · `user.deleted` |
+| **Documents** | `document.created` · `document.updated` · `document.deleted` · `document.shared` |
+| **API keys** | `api_key.created` · `api_key.revoked` |
+| **Payments** | `payment.processed` · `payment.refunded` · `payment.failed` |
+| **Permissions** | `permission.granted` · `permission.revoked` |
+| **System** | `config.changed` · `deploy.completed` |
 
-### Metadata
+<Tip>
+  If you need an action that doesn't appear in the catalog, you can register a custom action from **Dashboard → Actions → New Custom Action**. Custom actions follow the same `resource.verb` naming rules and are available for compliance reports immediately after registration.
+</Tip>
 
-`metadata` accepts arbitrary JSON — strings, numbers, booleans, nested objects, and arrays. There is currently no server-side enforcement of key count or value size beyond the overall request body limit (256KB for a single event, 2MB for a batch of up to 100). Keep it reasonably small anyway: it's stored and returned on every read of this event.
+---
 
-## Enriched Fields (Added by AuditRails)
+## Enriched Fields
 
-These fields are added automatically during processing. They appear in API responses and exports. All are optional in the response (omitted when empty, except the always-present ones noted).
+AuditRails automatically appends enriched fields to every event before storage. You never need to supply these — and you cannot override them. They are split into two groups: fields that are **always present**, and fields that are **added when available**.
+
+### Always Present
+
+These fields appear on every stored event without exception.
+
+<ResponseField name="log_id" type="string (ULID)">
+  A globally unique, lexicographically sortable identifier for this event. ULIDs encode a millisecond-precision timestamp in their first 10 characters, making them ideal for cursor-based pagination.
+</ResponseField>
+
+<ResponseField name="tenant_id" type="string (UUID)">
+  The UUID of the tenant that owns this event, derived from your API key at ingest time.
+</ResponseField>
+
+<ResponseField name="project_id" type="string (UUID)">
+  The UUID of the project associated with the API key used to log the event.
+</ResponseField>
+
+<ResponseField name="schema_version" type="integer">
+  The version of the AuditRails event schema used to store this record. Currently `1`. AuditRails will increment this value and provide a migration path for any breaking changes.
+</ResponseField>
+
+<ResponseField name="timestamp" type="string (ISO 8601 UTC)">
+  The time AuditRails received and persisted the event, formatted as ISO 8601 in UTC (e.g. `2024-03-13T14:22:33.456Z`). If you need to record when the event *occurred* on the client side, include a `ts_client` field in `metadata` or as a top-level enrichment (see below).
+</ResponseField>
+
+### Added When Available
+
+AuditRails appends these fields automatically when the data can be resolved. Their absence does not indicate an error.
 
 | Field | Type | Description |
-|-------|------|-------------|
-| `log_id` | string | ULID — globally unique, time-sortable identifier. Always present. |
-| `tenant_id` | string | UUID of the organization. Always present. |
-| `project_id` | string | UUID of the project (from API key). Always present. |
-| `schema_version` | integer | Internal event schema version. |
-| `actor_type` | string | Type of actor, when set (e.g., `user`, `system`). |
-| `resource_type` | string | Type of resource, when set. |
-| `category` | string | Category from the compliance action catalog, when set. |
-| `severity` | string | Severity, when set. |
-| `session_id` | string | Session identifier, when set. |
-| `ts_client` | string | Client-supplied timestamp, when set — distinct from `timestamp`. |
-| `timestamp` | string | ISO 8601 server timestamp (UTC, millisecond precision) when the event was received. Always present. |
-| `ip_address` | string | Source IP address of the API request. |
-| `country` | string | 2-letter country code from geo-IP lookup. |
-| `city` | string | City name from geo-IP lookup. |
+|---|---|---|
+| `actor_type` | string | Resolved type of the actor (e.g. `user`, `service_account`). |
+| `resource_type` | string | Resource portion of the `action` field (e.g. `document`). |
+| `category` | string | Compliance category the action belongs to (e.g. `data_access`). |
+| `severity` | string | Severity level assigned to this action in the catalog (`info`, `warn`, `critical`). |
+| `session_id` | string | Session identifier, if passed by the SDK or ingest API. |
+| `ts_client` | string (ISO 8601) | Client-reported event time, if provided. |
+| `ip_address` | string | Originating IP address of the API request. |
+| `country` | string | Two-letter ISO 3166-1 country code resolved from the IP. |
+| `city` | string | City name resolved from the IP. |
 
-## Chain Fields (Added by Hash Chain Engine)
+<Note>
+  IP address and geolocation fields (`ip_address`, `country`, `city`) are **excluded from hash computation**. This means they can be updated by AuditRails (e.g. after a GeoIP database refresh) without invalidating your chain integrity. See [Chain Fields](#chain-fields) below.
+</Note>
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `chain_seq` | integer | Monotonically increasing sequence number within the project's chain. |
-| `hash` | string | SHA-256 hash of this event (64 hex characters). |
-| `prev_hash` | string | Hash of the previous event in the chain. |
+---
 
-Chain fields — along with `country`/`city`/`ip_address` and the rest of the enriched fields — are excluded from the hash computation itself. The canonical payload hashed is `log_id`, `tenant_id`, `action`, `actor_id`, `resource`, and `metadata`. See [Verify Hash Chain](/api-reference/verify-chain) for details.
+## Chain Fields
 
-## Example: Complete Event
+AuditRails implements a cryptographic hash chain across all events within a project. Each event is linked to the previous one, making any retroactive modification detectable. These fields are computed by AuditRails and cannot be supplied by you.
 
-Input (what you send):
+<ResponseField name="chain_seq" type="integer">
+  A monotonically increasing sequence number within the project's chain. Gaps in `chain_seq` indicate a tampered or missing event.
+</ResponseField>
+
+<ResponseField name="hash" type="string">
+  A SHA-256 hash of this event's canonical payload, encoded as 64 lowercase hex characters.
+</ResponseField>
+
+<ResponseField name="prev_hash" type="string">
+  The `hash` of the immediately preceding event in the chain. For the very first event in a project, this is a string of 64 zero characters (`0000...0000`).
+</ResponseField>
+
+### Canonical Payload for Hash Computation
+
+The hash is computed over a strict, deterministic subset of fields. Enrichment and chain fields themselves are excluded to allow non-breaking updates (such as GeoIP re-resolution) without invalidating the chain.
+
+| Included in hash | Excluded from hash |
+|---|---|
+| `log_id` | `chain_seq` |
+| `tenant_id` | `hash` |
+| `action` | `prev_hash` |
+| `actor_id` | `ip_address` |
+| `resource` | `country` |
+| `metadata` | `city` |
+| | All other enriched fields |
+
+<Warning>
+  Do not rely on the presence of any excluded field when computing your own chain verification. Always reconstruct the canonical payload from the six included fields only.
+</Warning>
+
+---
+
+## Full Example
+
+### Input (what you send)
+
 ```json
 {
   "action": "document.shared",
@@ -80,7 +148,8 @@ Input (what you send):
 }
 ```
 
-Stored (what AuditRails records, and what a `GET /v1/events/{log_id}` response looks like):
+### Stored Event (what AuditRails persists)
+
 ```json
 {
   "log_id": "01HXA1B2C3D4E5F6G7H8J9K0",
@@ -104,3 +173,7 @@ Stored (what AuditRails records, and what a `GET /v1/events/{log_id}` response l
   "prev_hash": "f6e5d4c3b2a1...64 hex chars"
 }
 ```
+
+<Info>
+  The `log_id` returned in the ingest response is the same ULID stored in the event record. You can use it immediately to retrieve the event via `GET /v1/events/{log_id}`.
+</Info>

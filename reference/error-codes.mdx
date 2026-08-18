@@ -1,102 +1,156 @@
 ---
-title: Error Codes
-description: Complete list of AuditRails API error codes with causes and fixes.
+title: "Error Codes Reference: All API Error Responses"
+sidebarTitle: "Error Codes"
+description: "Complete reference for every AuditRails API error code, its HTTP status, root cause, and the exact steps needed to resolve it."
 ---
 
-# Error Codes
+When an AuditRails API request cannot be completed, the response body always contains a structured error object. Every error carries a stable machine-readable `code`, a human-readable `message`, and a `request_id` you can share with support. Familiarizing yourself with the error taxonomy makes it straightforward to write robust error-handling logic in your integration.
 
-All API errors return a structured JSON response:
+## Error Response Structure
+
+All errors — regardless of category — follow the same JSON envelope:
 
 ```json
 {
   "error": {
     "code": "auth/key_not_found",
-    "message": "API key not found. Verify the key is correct or generate a new one in the dashboard.",
+    "message": "API key not found. Verify the key is correct or generate a new one from the dashboard.",
     "request_id": "req_01HX...",
     "doc_url": "https://docs.auditrails.io/reference/error-codes"
   }
 }
 ```
 
-`doc_url` always points to this page — there isn't a separate page per error code. Some `action/*` errors also include `suggestion` and `valid_actions_url` fields (the latter links to [`GET /v1/actions`](/api-reference/actions)).
+<ResponseField name="error.code" type="string">
+  A slash-namespaced, stable identifier for the error (e.g. `auth/key_not_found`). Use this field in your error-handling switch statements — `message` text may change without notice.
+</ResponseField>
 
-## Authentication Errors (401)
+<ResponseField name="error.message" type="string">
+  A plain-English description of the problem and, where relevant, how to fix it. Suitable for logging but not for display to end users.
+</ResponseField>
 
-| Code | Message | Fix |
-|------|---------|-----|
-| `auth/missing_header` | Missing Authorization header | Add `Authorization: Bearer at_live_...` (or `at_test_...`) |
-| `auth/invalid_format` | Invalid Authorization header format | Header must be exactly `Bearer <api_key>` |
-| `auth/key_not_found` | API key not found | Check the key is correct, or generate a new one in the dashboard |
-| `auth/key_revoked` | API key has been revoked | Generate a new key in the dashboard |
-| `auth/key_expired` | API key has expired | Generate a new key in the dashboard |
+<ResponseField name="error.request_id" type="string">
+  A unique identifier for the specific API request that failed. Always include this when contacting support.
+</ResponseField>
 
-## Subscription Errors (402)
+<ResponseField name="error.doc_url" type="string">
+  Always points to this page. Useful when surfacing errors in dashboards or alerting systems.
+</ResponseField>
 
-| Code | Message | Fix |
-|------|---------|-----|
-| `subscription/trial_expired` | Your trial has ended | Add a payment method in the dashboard — existing data is retained |
+<Note>
+  Errors in the `action/*` namespace may include two additional fields: `suggestion` (a recommended fix) and `valid_actions_url` (a direct link to your project's action catalog). Check for these fields when handling action validation errors.
+</Note>
 
-## Rate Limiting Errors (429)
+---
 
-| Code | Message | Fix |
-|------|---------|-----|
-| `rate/limit_exceeded` | Your plan's rate limit was exceeded | Wait for `Retry-After` seconds, or upgrade your plan |
-| `rate/ip_limit_exceeded` | Per-IP rate limit exceeded (100 req/s) | Applies before authentication, per source IP, regardless of key — spread traffic across more IPs or slow down |
-| `rate/test_limit_exceeded` | Test-mode key rate limit exceeded (60 req/s by default) | `at_test_...` keys have their own small, plan-independent pool — use a live key for production load |
+## Authentication Errors — `401 Unauthorized`
 
-Every `429` response includes a `Retry-After` header (seconds to wait).
+These errors occur before any request processing. Check your API key configuration first.
+
+| Code | Description | Resolution |
+|---|---|---|
+| `auth/missing_header` | The `Authorization` header is absent from the request. | Add `Authorization: Bearer at_live_...` to every request. |
+| `auth/invalid_format` | The `Authorization` header is present but malformed. | The header must be exactly `Bearer <api_key>` — no extra whitespace or encoding. |
+| `auth/key_not_found` | The API key does not exist in AuditRails. | Verify the key was copied in full, or generate a new one from **Dashboard → API Keys**. |
+| `auth/key_revoked` | The API key has been explicitly revoked. | Generate a replacement key from **Dashboard → API Keys**. |
+| `auth/key_expired` | The API key has passed its expiry date. | Generate a replacement key from **Dashboard → API Keys**. |
+
+<Warning>
+  Never log your full API key in error reports or support tickets. When contacting support, share only the first 10 characters of the key prefix (e.g. `at_live_abc`). This is enough for the support team to identify the key without compromising your account.
+</Warning>
+
+---
+
+## Subscription Errors — `402 Payment Required`
+
+| Code | Description | Resolution |
+|---|---|---|
+| `subscription/trial_expired` | Your free trial period has ended and no payment method is on file. | Add a payment method from **Dashboard → Billing**. Your event data is retained and immediately accessible once billing is activated. |
+
+---
+
+## Rate Limiting Errors — `429 Too Many Requests`
+
+All `429` responses include a `Retry-After` header indicating the number of seconds to wait before retrying. See the [Rate Limits reference](/reference/rate-limits) for full details on limits by plan and key type.
+
+| Code | Description | Resolution |
+|---|---|---|
+| `rate/limit_exceeded` | Your project has exceeded its per-plan request rate for the current second. | Wait the number of seconds specified in `Retry-After`, then retry. Consider upgrading your plan for a higher limit. |
+| `rate/ip_limit_exceeded` | The originating IP address has exceeded the global 100 req/s per-IP limit. | Spread traffic across multiple IPs or reduce request frequency. |
+| `rate/test_limit_exceeded` | A test key (`at_test_...`) has exceeded its 60 req/s limit. | Switch to a live key (`at_live_...`) for production workloads. |
+
+<Tip>
+  All AuditRails SDKs automatically retry rate limit errors with exponential backoff — you do not need to implement this yourself when using the `log()` batch method. Only `logDirect()` surfaces rate limit errors as exceptions.
+</Tip>
+
+---
 
 ## Validation Errors
 
-| Code | Status | Message | Fix |
-|------|--------|---------|-----|
-| `validation/missing_action` | 422 | The `action` field is required | Include `action` in your event payload |
-| `validation/invalid_json` | 400 | Request body contains invalid JSON | Check your JSON syntax |
-| `validation/batch_too_large` | 400 | Batch size exceeds maximum of 100 events | Split into multiple batch requests |
-| `validation/batch_empty` | 400 | The events array is empty | Include at least one event in the batch |
-| `validation/body_too_large` | 413 | Request body exceeds the maximum allowed size | 256KB for a single event, 2MB for a batch |
+These errors indicate a problem with the structure or content of your request payload. They must be fixed in your code before retrying — retrying without changes will produce the same error.
+
+| Code | HTTP Status | Description | Resolution |
+|---|---|---|---|
+| `validation/missing_action` | `422` | The required `action` field is absent from the event payload. | Include the `action` field in every event. See [Event Schema](/reference/event-schema). |
+| `validation/invalid_json` | `400` | The request body is not valid JSON. | Check for trailing commas, unescaped characters, or encoding issues in your payload. |
+| `validation/batch_too_large` | `400` | The batch contains more than 100 events. | Split your batch into multiple requests of up to 100 events each. |
+| `validation/batch_empty` | `400` | The batch array is present but contains zero events. | Include at least one event object in the `events` array. |
+| `validation/body_too_large` | `413` | The request body exceeds the size limit. | Keep single-event requests under **256 KB** and batch requests under **2 MB**. Move large data to external storage and log a reference. |
+
+---
 
 ## Event Errors
 
-| Code | Status | Message | Fix |
-|------|--------|---------|-----|
-| `event/write_failed` | 500 | Failed to process the event | Retry the request |
-| `event/idempotency_key_conflict` | 409 | The `Idempotency-Key` was reused with a different request body | Use a new key, or replay the exact original request |
-| `event/idempotency_key_in_flight` | 409 | A request with this `Idempotency-Key` is already being processed | Retry shortly |
+| Code | HTTP Status | Description | Resolution |
+|---|---|---|---|
+| `event/write_failed` | `500` | AuditRails encountered an internal error while persisting the event. | Retry the request. All SDKs handle this automatically with exponential backoff. |
+| `event/idempotency_key_conflict` | `409` | An idempotency key was reused with a different payload. | Use a new idempotency key, or replay the exact original request body to retrieve the cached response. |
+| `event/idempotency_key_in_flight` | `409` | A request with this idempotency key is currently being processed. | Wait a moment and retry — the in-flight request will resolve shortly. |
+
+---
 
 ## Read Errors
 
-| Code | Status | Message | Fix |
-|------|--------|---------|-----|
-| `read/invalid_params` | 400 | Invalid query parameters | Check the parameter name/format against the endpoint's reference page |
-| `read/query_failed` | 500 | Failed to query events | Retry the request |
-| `read/not_found` | 404 | Event not found | Check the `log_id` and that the event belongs to this API key's project |
+| Code | HTTP Status | Description | Resolution |
+|---|---|---|---|
+| `read/invalid_params` | `400` | One or more query parameters are unrecognized or incorrectly formatted. | Check the [API Reference](/api-reference/get-events) for valid parameter names and formats. |
+| `read/query_failed` | `500` | AuditRails encountered an internal error while executing the query. | Retry the request. Contact support if the error persists. |
+| `read/not_found` | `404` | No event was found for the given `log_id`. | Verify the `log_id` is correct and that you are querying within the right project scope. |
 
-## Action Catalog & Framework Errors
+---
 
-| Code | Status | Message | Fix |
-|------|--------|---------|-----|
-| `action/invalid` | 422 | Action is not a valid compliance action | Check spelling, or see [`GET /v1/actions`](/api-reference/actions) for the live catalog |
-| `action/requires_framework` | 403 | Action requires a framework your organization hasn't subscribed to | Add the framework in the dashboard's Billing page |
-| `action/missing_required_fields` | 422 | Action is missing required field(s) | See [`GET /v1/actions`](/api-reference/actions)'s `required_fields` for that action |
-| `framework/disabled` | 403 | Action only belongs to frameworks that aren't currently active on the platform | Contact support if you need it activated |
+## Action & Framework Errors
 
-## Server Errors (500)
+These errors relate to the action catalog and compliance framework configuration for your project.
 
-| Code | Message | Fix |
-|------|---------|-----|
-| `server/internal` | An internal error occurred | Retry the request. If persistent, contact support |
+| Code | HTTP Status | Description | Resolution |
+|---|---|---|---|
+| `action/invalid` | `422` | The `action` value is not in the compliance catalog and is not registered as a custom action. | Check your spelling. Retrieve the full list of valid actions with `GET /v1/actions`. |
+| `action/requires_framework` | `403` | The action belongs to a compliance framework not enabled for your project. | Enable the required framework from **Dashboard → Billing → Frameworks**. |
+| `action/missing_required_fields` | `422` | The action requires additional metadata fields that were not provided. | Call `GET /v1/actions` and check the `required_fields` array for this action. |
+| `framework/disabled` | `403` | A previously enabled compliance framework has been disabled on your account. | Contact [AuditRails support](https://auditrails.io/contact) to re-enable or migrate the framework. |
+
+---
+
+## Server Errors — `500 Internal Server Error`
+
+| Code | Description | Resolution |
+|---|---|---|
+| `server/internal` | An unexpected internal error occurred that does not fall into a more specific category. | Retry the request. If the error persists for more than a few minutes, contact support with your `request_id`. |
 
 <Info>
-All SDKs automatically retry 5xx errors with exponential backoff. You only need to handle these if making direct HTTP calls.
+  All AuditRails SDKs automatically retry `5xx` errors using exponential backoff. You only need to handle these manually if you are integrating directly with the HTTP API.
 </Info>
 
-## Using Request IDs for Support
+---
 
-Every response includes a `request_id` (also in the `X-Request-Id` header). When contacting support:
+## Contacting Support
 
-1. Include the `request_id` from the error response
-2. Include the timestamp of the request
-3. Include the API key prefix (first 10 characters, e.g., `at_live_abc`)
+If you need to escalate an error to the AuditRails support team, include the following in your report:
 
-This allows us to trace the exact request through our systems.
+1. The **`request_id`** from the error response (e.g. `req_01HX...`)
+2. The **timestamp** of the failed request
+3. The **first 10 characters** of your API key prefix (e.g. `at_live_abc`) — never the full key
+4. The full **error code** (e.g. `server/internal`)
+
+Reach the support team at [auditrails.io/contact](https://auditrails.io/contact).

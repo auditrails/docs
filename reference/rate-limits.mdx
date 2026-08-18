@@ -1,68 +1,139 @@
 ---
-title: Rate Limits
-description: Per-plan rate limits and how to handle 429 responses.
+title: "Rate Limits Reference: Quotas & Throttling Rules"
+sidebarTitle: "Rate Limits"
+description: "How AuditRails rate limiting works, which limits apply to your plan and key type, how to handle 429 responses, and best practices for high-throughput logging."
 ---
 
-# Rate Limits
+AuditRails enforces rate limits to ensure fair, reliable service for all tenants. All limits use a **fixed-window algorithm** with a one-second window — the counter resets at the start of each new second. Three independent limits are evaluated in order on every inbound request, and the first one exceeded produces a `429` response. Understanding how these layers work together helps you design your integration to stay well within limits and handle throttling gracefully when it does occur.
 
-AuditRails enforces rate limits using a fixed-window algorithm (one window per second), checked in this order: a per-IP limit (before auth), then a per-plan limit (live keys) or a separate test-key limit (`at_test_…` keys).
+## How the Three Limit Layers Work
 
-## Limits by Plan
+Each request passes through the following checks in order. If any check fails, the request is rejected immediately and subsequent checks are not evaluated.
 
-| Plan | Requests/second | Events/month included | Batch size |
-|------|----------------|------------------------|------------|
-| **Starter Trails** | 1,000 | 250,000 | 100 |
-| **Framework Trails** | 1,000 | 1,000,000 | 100 |
-| **Compliance Trails** | 1,000 | Unlimited | 100 |
+### 1. Per-IP Limit
 
-Plan limits are admin-configurable per tenant — the dashboard's Billing page is the source of truth for your exact current values, these are the defaults.
+**100 requests per second**, evaluated before authentication. This limit applies universally to all callers regardless of plan, key type, or tenant, and cannot be increased.
 
-## Per-IP and Test-Key Limits
+- **Error code:** `rate/ip_limit_exceeded`
+- **When it triggers:** More than 100 requests originate from the same IP address within a single second.
+- **How to resolve:** Distribute outbound requests across multiple IPs, or reduce your per-IP send rate.
 
-Two more limits apply regardless of plan:
+### 2. Per-Plan Limit (Live Keys)
 
-| Scope | Limit | Error code |
-|-------|-------|------------|
-| Per source IP (before auth, every request) | 100 req/s | `rate/ip_limit_exceeded` |
-| `at_test_…` keys (separate pool, not your plan's limit) | 60 req/s by default | `rate/test_limit_exceeded` |
+Applies to all requests authenticated with a live key (`at_live_...`). The limit is set at the plan level and is admin-configurable — your current effective limit is always shown on the **Dashboard → Billing** page.
 
-## No Rate-Limit Headers on Success
+| Plan | Default Rate Limit |
+|---|---|
+| Starter Trails | 1,000 req/s |
+| Framework Trails | 1,000 req/s |
+| Compliance Trails | 1,000 req/s |
 
-AuditRails does not return `X-RateLimit-Limit`/`X-RateLimit-Remaining`/`X-RateLimit-Reset` headers on successful responses. The only rate-limit-related header is `Retry-After`, present only on `429` responses.
+- **Error code:** `rate/limit_exceeded`
+- **When it triggers:** Your project exceeds its plan's request rate within a single second.
+- **How to resolve:** Wait the number of seconds specified in the `Retry-After` response header, then retry. If you consistently hit this limit, consider upgrading your plan or contacting sales for a custom limit.
 
-## Handling 429 Responses
+### 3. Test-Key Limit
 
-When you exceed any of the limits above, the API returns:
+Applies exclusively to requests authenticated with a test key (`at_test_...`). Test keys draw from a separate pool and are intentionally capped at a lower rate to encourage proper use of live keys in production environments.
+
+**60 requests per second** per test key.
+
+- **Error code:** `rate/test_limit_exceeded`
+- **When it triggers:** More than 60 requests are made with a test key within a single second.
+- **How to resolve:** Switch to a live key (`at_live_...`) for all production and load-testing workloads.
+
+<Warning>
+  Never use test keys (`at_test_...`) in production. Test key events are stored separately, are not included in compliance exports, and are subject to lower rate and retention limits. Use live keys for all production logging.
+</Warning>
+
+---
+
+## Monthly Event Quotas
+
+In addition to per-second rate limits, each plan includes a monthly event quota. Batch ingestion counts each *event* toward the quota — not each *request*.
+
+| Plan | Monthly Event Quota |
+|---|---|
+| Starter Trails | 250,000 events / month |
+| Framework Trails | 1,000,000 events / month |
+| Compliance Trails | Unlimited |
+
+<Info>
+  Your current monthly usage and remaining quota are visible on the **Dashboard → Billing** page. You will receive email notifications at 80% and 100% of your monthly quota.
+</Info>
+
+---
+
+## Batch Requests and Rate Limit Counting
+
+A batch request (up to 100 events) counts as **one request** against all rate limit counters, regardless of how many events it contains. This makes batching the most efficient way to ingest high volumes of events without exhausting your rate limit.
+
+| Ingestion method | Rate limit cost | Monthly quota cost |
+|---|---|---|
+| Single event (`POST /v1/events`) | 1 request | 1 event |
+| Batch of 100 events (`POST /v1/events/batch`) | 1 request | 100 events |
+
+<Tip>
+  Use the SDK's `log()` method for all production logging. It automatically batches events in the background, respects rate limits, and retries with exponential backoff — giving you up to 100× the effective throughput compared to logging events one at a time with `logDirect()`.
+</Tip>
+
+---
+
+## 429 Response Format
+
+When any rate limit is exceeded, AuditRails returns an HTTP `429 Too Many Requests` response with a `Retry-After` header indicating the number of seconds to wait before retrying.
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 1
+```
 
 ```json
 {
   "error": {
     "code": "rate/limit_exceeded",
-    "message": "Starter Trails plan: 1000 req/s limit exceeded. Retry after the Retry-After duration.",
+    "message": "Starter Trails plan: 1000 req/s limit exceeded. Retry after 1 second.",
     "request_id": "req_01HX...",
     "doc_url": "https://docs.auditrails.io/reference/error-codes"
   }
 }
 ```
 
-`code` is `rate/ip_limit_exceeded` or `rate/test_limit_exceeded` for those cases instead. The `Retry-After` header indicates how many seconds to wait:
+<Note>
+  AuditRails does **not** include `X-RateLimit-*` headers (e.g. `X-RateLimit-Remaining`) on successful responses. Rate limit state is only communicated via `Retry-After` on `429` responses. Use the **Dashboard → Billing** page to monitor usage trends over time.
+</Note>
 
-```
-HTTP/1.1 429 Too Many Requests
-Retry-After: 1
-```
+---
 
 ## SDK Behavior
 
-All official SDKs handle rate limiting automatically:
+The AuditRails SDK handles rate limiting automatically, with different behavior depending on which method you use:
 
-- **`log()` (buffered):** Events are batched, reducing request count. Rate limit errors on batch sends are retried with backoff.
-- **`logDirect()` (immediate):** Rate limit errors are propagated to your code as exceptions.
+| Method | Rate limit behavior |
+|---|---|
+| `log()` | Events are auto-batched. Rate limit errors are retried transparently with exponential backoff. No exception is raised in your application. |
+| `logDirect()` | Sends a single event synchronously. Rate limit errors are surfaced as exceptions and must be handled by your code. |
 
-## Best Practices
+For most production use cases, `log()` is the correct choice. Reserve `logDirect()` for situations where you need synchronous confirmation or are implementing your own batching and retry logic.
 
-1. **Use batch mode** — `log()` automatically batches up to 100 events per request
-2. **Use `logDirect()` sparingly** — only for compliance-critical events that need confirmation
-3. **Respect `Retry-After` and back off exponentially** — there's no remaining-quota header to poll proactively
-4. **Use a live key, not a test key, for anything beyond light testing** — test keys share a much smaller fixed pool
-5. **Upgrade your plan** if you consistently hit your monthly events quota
+---
+
+## Best Practices for High-Throughput Logging
+
+1. **Respect `Retry-After`.** Always honor the value in the `Retry-After` header. Retrying immediately after a `429` will produce another `429` and waste your quota.
+
+2. **Implement exponential backoff.** If you are calling the API directly (not via SDK), back off exponentially on repeated `429` responses: 1 s → 2 s → 4 s → 8 s, with jitter to avoid thundering-herd problems.
+
+3. **Use batch ingestion.** Call `log()` (SDK) or `POST /v1/events/batch` (API) to pack up to 100 events into a single request. This reduces rate limit pressure by up to 100× compared to single-event requests.
+
+4. **Use live keys for production.** Test keys are limited to 60 req/s and are not suitable for any workload beyond integration testing and local development.
+
+5. **Upgrade your plan for higher monthly quotas.** If you are consistently approaching your monthly event quota, upgrade to Framework Trails or Compliance Trails — both offer significantly higher or unlimited monthly capacity.
+
+---
+
+## Custom Rate Limits
+
+If your use case requires a rate limit higher than your plan's default, contact the AuditRails sales team. Custom limits are available on all paid plans and are configured at the project level.
+
+[Contact Sales →](https://auditrails.io/contact)

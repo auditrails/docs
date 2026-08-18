@@ -1,68 +1,64 @@
 ---
-title: Log Batch Events
-description: Log up to 100 audit events in a single request.
-api: POST /v1/events/batch
+title: "Log Batch Events — POST /v1/events/batch"
+sidebarTitle: "Log Batch"
+description: "Append up to 100 audit log entries in a single atomic request. The entire batch is accepted or rejected together — no partial writes."
 ---
 
-# Log Batch Events
+The `/v1/events/batch` endpoint lets you record up to 100 audit events in a single API call. Batching is the recommended pattern for high-throughput services — it reduces round-trip overhead, and the entire batch counts as just one request against your rate limit. Each event in the array follows the same structure as a single event: an `action` is required, while `actor_id`, `resource`, and `metadata` are optional. If you only need to record one event at a time, see the [single event endpoint](/api-reference/post-events) instead.
 
-Log up to 100 audit events in a single request. Each event is individually hash-chained and stored. Use batch ingestion for high-throughput scenarios to reduce HTTP overhead.
+## Request
 
-## Request Headers
+**`POST https://api.auditrails.io/v1/events/batch`**
 
-<ParamField header="Idempotency-Key" type="string">
-  Optional client-generated key for safe retries, applied to the whole batch —
-  see the [single event endpoint's](/api-reference/post-events) Idempotency-Key
-  docs for the exact semantics.
+### Headers
+
+<ParamField header="Authorization" type="string" required>
+  Your AuditRails API key, prefixed with `Bearer`. Use a live key (`at_live_xxx`) for production traffic and a test key (`at_test_xxx`) for development.
+
+  Example: `Bearer at_live_xxx`
 </ParamField>
 
-## Request Body
+<ParamField header="Content-Type" type="string" required>
+  Must be `application/json`.
+</ParamField>
+
+<ParamField header="Idempotency-Key" type="string">
+  An optional client-generated string (e.g. a UUID) that makes the entire batch safe to retry. If you resend the same key with an identical request body, AuditRails replays the original 202 response and sets the `Idempotency-Replayed: true` response header — no duplicate events are written.
+
+  Sending the same key with a **different** body returns a `409` conflict error. Keys are retained for 24 hours.
+</ParamField>
+
+### Body
 
 <ParamField body="events" type="array" required>
-  Array of event objects. Minimum 1, maximum 100 events per request.
+  An array of event objects to log. Must contain between **1 and 100** events. The batch is processed atomically — if any single event fails validation, the entire batch is rejected and nothing is written. Correct all validation errors and resubmit the full batch.
 
-  Each event object accepts the same fields as the [single event endpoint](/api-reference/post-events):
+  Each event object supports the following fields:
 
-  <Expandable title="Event object">
+  <Expandable title="Event object fields">
     <ParamField body="action" type="string" required>
-      What happened. Must be present in the compliance action catalog or a
-      custom action. Use `resource.verb` format (e.g., `user.login`, `document.deleted`).
-      Maximum 255 characters.
+      A string identifying what happened. Maximum 255 characters. Must match an entry in your compliance catalog or be a registered custom action. We strongly recommend the `resource.verb` format (e.g. `user.login`, `document.created`, `permission.granted`).
     </ParamField>
 
     <ParamField body="actor_id" type="string">
-      Who performed the action. Maximum 255 characters.
+      The identifier of the person or system that performed the action. Maximum 255 characters. Omit only when the actor is genuinely unknown or not applicable.
     </ParamField>
 
     <ParamField body="resource" type="string">
-      What was affected. Maximum 255 characters.
+      The object the action was performed on. Maximum 255 characters. Use the `type/id` format (e.g. `document/doc-456`) so that resource-scoped queries work correctly in the AuditRails dashboard.
     </ParamField>
 
     <ParamField body="metadata" type="object">
-      Additional context as key-value pairs. Not currently size- or
-      key-count-limited server-side beyond the overall request body limit (2MB
-      per batch).
+      A free-form key-value object for any additional context. There is no hard limit on the number of keys, but the total request body must not exceed **256 KB**.
     </ParamField>
   </Expandable>
 </ParamField>
 
-## Response
-
-<ResponseField name="log_ids" type="array">
-  Array of ULID strings, one per event, in the same order as the request.
-</ResponseField>
-
-<ResponseField name="request_id" type="string">
-  Unique request identifier for tracing.
-</ResponseField>
-
-## Examples
-
-### curl
+### Example request
 
 ```bash
 curl -X POST https://api.auditrails.io/v1/events/batch \
-  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Authorization: Bearer at_live_xxx" \
   -H "Content-Type: application/json" \
   -d '{
     "events": [
@@ -88,7 +84,56 @@ curl -X POST https://api.auditrails.io/v1/events/batch \
   }'
 ```
 
+```json
+{
+  "events": [
+    {
+      "action": "user.login",
+      "actor_id": "user_123",
+      "resource": "session/sess_abc",
+      "metadata": { "ip": "203.0.113.1" }
+    },
+    {
+      "action": "document.created",
+      "actor_id": "user_123",
+      "resource": "document/doc-456",
+      "metadata": { "title": "Q4 Report" }
+    },
+    {
+      "action": "permission.granted",
+      "actor_id": "user_123",
+      "resource": "document/doc-456",
+      "metadata": { "grantee": "user_789", "role": "viewer" }
+    }
+  ]
+}
+```
+
+<Note>
+  **Atomic writes:** The batch endpoint writes all events or none. If any event in the array fails validation — for example, a missing `action` field — the entire batch is rejected with a `422` error that identifies the offending index (e.g. `event[2]: action field required`). Correct every flagged event and resubmit the complete array.
+</Note>
+
+<Note>
+  **Rate limiting:** Regardless of how many events are in the array, the batch endpoint counts as a single request against your rate limit. Batching is the most efficient way to ingest high volumes of events without hitting rate limits.
+</Note>
+
+---
+
+## Response
+
+A `202 Accepted` response means all events in the batch have been durably written and sealed.
+
 ### 202 Accepted
+
+<ResponseField name="log_ids" type="array of strings">
+  An ordered array of unique, immutable identifiers for each accepted audit log entry. The IDs are returned in the same order as the events in your request array, so `log_ids[0]` corresponds to `events[0]`, `log_ids[1]` to `events[1]`, and so on. Each ID is a [ULID](https://github.com/ulid/spec) — lexicographically sortable and time-prefixed.
+</ResponseField>
+
+<ResponseField name="request_id" type="string">
+  A unique identifier for the API request itself. Include this value in any support tickets or bug reports related to this call.
+</ResponseField>
+
+### Example response
 
 ```json
 {
@@ -101,62 +146,18 @@ curl -X POST https://api.auditrails.io/v1/events/batch \
 }
 ```
 
-## Error Responses
+---
 
-Every error uses the same envelope — see [Error Codes](/reference/error-codes) for the full list. A few examples relevant to this endpoint:
+## Error responses
 
-### 400 Bad Request — Empty Batch
+| HTTP Status | Error Code | Description |
+|---|---|---|
+| `400` | `validation/batch_empty` | The `events` array is present but contains zero items. Include at least one event object. |
+| `400` | `validation/batch_too_large` | The `events` array exceeds the 100-event maximum. Split your payload into smaller batches and resubmit. |
+| `401` | `auth/key_not_found` | The API key in the `Authorization` header was not recognized. Check that you are using the correct key for the target environment. |
+| `409` | `event/idempotency_key_conflict` | An `Idempotency-Key` was reused with a different request body. Use a new key or resend the original body. |
+| `422` | `validation/missing_action` | One or more events are missing the required `action` field. The error message identifies the first offending index (e.g. `event[2]: action field required`). Fix all invalid events and resubmit the full batch. |
 
-```json
-{
-  "error": {
-    "code": "validation/batch_empty",
-    "message": "The events array is empty.",
-    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
-    "doc_url": "https://docs.auditrails.io/reference/error-codes"
-  }
-}
-```
-
-### 400 Bad Request — Batch Too Large
-
-```json
-{
-  "error": {
-    "code": "validation/batch_too_large",
-    "message": "Batch size exceeds maximum of 100 events.",
-    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
-    "doc_url": "https://docs.auditrails.io/reference/error-codes"
-  }
-}
-```
-
-### 422 Unprocessable Entity — Validation Error in One Event
-
-```json
-{
-  "error": {
-    "code": "validation/missing_action",
-    "message": "event[2]: the 'action' field is required.",
-    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
-    "doc_url": "https://docs.auditrails.io/reference/error-codes"
-  }
-}
-```
-
-### 409 Conflict — Idempotency Key Reused
-
-```json
-{
-  "error": {
-    "code": "event/idempotency_key_conflict",
-    "message": "This Idempotency-Key was already used with a different request body.",
-    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
-    "doc_url": "https://docs.auditrails.io/reference/error-codes"
-  }
-}
-```
-
-<Note>
-Batch requests are atomic — if any event fails validation, the entire batch is rejected. Fix the invalid event and resubmit the full batch.
-</Note>
+<Warning>
+  Because the batch is all-or-nothing, a single invalid event blocks the entire array from being written. The `422` error message will tell you which index is invalid, but make sure to audit **all** events in your batch before resubmitting — there may be multiple validation errors beyond the first one reported.
+</Warning>

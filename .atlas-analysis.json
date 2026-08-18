@@ -1,0 +1,123 @@
+{
+  "projectType": "saas",
+  "projectName": "AuditRails",
+  "projectDescription": "Tamper-proof audit logging platform with cryptographic hash chaining, WORM storage, and built-in compliance support for SOC 2, HIPAA, GDPR, PCI DSS, and 14 other frameworks.",
+  "theme": "luma",
+  "primaryColor": "#3366FF",
+  "lightColor": "#5588FF",
+  "darkColor": "#2255DD",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "concepts",
+              "authentication"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/compliance-mapping",
+              "guides/hash-chain-verification",
+              "guides/data-retention",
+              "guides/gdpr-compliance"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/event-schema",
+              "reference/error-codes",
+              "reference/rate-limits"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/overview",
+              "api-reference/authentication",
+              "api-reference/rate-limits"
+            ]
+          },
+          {
+            "group": "Ingestion",
+            "pages": [
+              "api-reference/post-events",
+              "api-reference/post-events-batch"
+            ]
+          },
+          {
+            "group": "Read & Verify",
+            "pages": [
+              "api-reference/get-events",
+              "api-reference/get-event",
+              "api-reference/verify-chain",
+              "api-reference/actions"
+            ]
+          },
+          {
+            "group": "Data Subject Requests",
+            "pages": [
+              "api-reference/dsar-export",
+              "api-reference/dsar-delete"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "SDKs",
+        "groups": [
+          {
+            "group": "SDKs",
+            "pages": [
+              "sdks/overview",
+              "sdks/node",
+              "sdks/python",
+              "sdks/go",
+              "sdks/java",
+              "sdks/php"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Cryptographic SHA-256 hash chaining — any tampered event breaks the chain instantly",
+    "WORM storage via S3 Object Lock in COMPLIANCE mode — immutable even against AWS root",
+    "18 compliance frameworks including SOC 2, HIPAA, ISO 27001, GDPR, PCI DSS, NIS2, DORA, SOX, FedRAMP, EU AI Act",
+    "Drop-in SDKs for Node.js, Python, Go, Java, and PHP with fire-and-forget logging",
+    "Real-time ClickHouse-powered search across billions of events",
+    "DSAR export and deletion workflows for GDPR Article 15/17 compliance",
+    "Role-based access control with Admin, Member, and Auditor roles",
+    "CSV export for audit evidence packages",
+    "Compliance dashboard with auto-verification of logging requirements",
+    "Idempotent event ingestion with Idempotency-Key header support"
+  ],
+  "publicApiSurface": [
+    "POST /v1/events — log a single audit event",
+    "POST /v1/events/batch — log up to 100 events in one request",
+    "GET /v1/events — list events with filters and cursor-based pagination",
+    "GET /v1/events/{log_id} — retrieve a single event with hash chain details",
+    "GET /v1/events/verify — verify hash chain integrity over a range of sequence numbers",
+    "GET /v1/actions — retrieve the compliance action catalog",
+    "DSAR Export — dashboard-initiated export of all events for a specific actor",
+    "DSAR Delete — dashboard-initiated deletion of all events for a specific actor",
+    "SDK: audit.log(event) — buffered fire-and-forget event logging",
+    "SDK: audit.logDirect(event) — synchronous event logging with response",
+    "SDK: audit.logBatchDirect(events) — synchronous batch event logging",
+    "SDK: audit.flush() — flush buffered events immediately",
+    "SDK: audit.close() — graceful shutdown with final flush"
+  ]
+}

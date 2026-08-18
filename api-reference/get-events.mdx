@@ -1,161 +1,125 @@
 ---
-title: List Events
-description: Query audit events with filters, pagination, and time ranges.
-api: GET /v1/events
+title: "List Events — AuditRails API Reference"
+sidebarTitle: "List Events"
+description: "Retrieve a paginated, newest-first list of audit log events. Filter by action, actor, resource, or date range using cursor-based pagination."
 ---
 
-# List Events
+The List Events endpoint returns your audit log entries in descending order by `log_id`, giving you the most recent activity first. You can narrow results with any combination of filters and page through large result sets using the cursor returned in each response. Every response includes an `X-Request-Id` header you can use when tracing requests with AuditRails support.
 
-Retrieve audit events for your project with optional filters. Results are returned in reverse chronological order (newest first, by descending `log_id`), using cursor-based pagination.
+## Endpoint
+
+```
+GET https://api.auditrails.io/v1/events
+```
 
 ## Query Parameters
 
 <ParamField query="action" type="string">
-  Filter by exact action name (e.g., `user.login`). Exact match only — no wildcard/partial matching.
+  Filter events to an exact action name, such as `user.login` or `document.deleted`. Partial matches are not supported — the value must be an exact string match.
 </ParamField>
 
 <ParamField query="actor_id" type="string">
-  Filter by exact actor identifier. Exact match only.
+  Return only events produced by this actor. Must be an exact match against the `actor_id` field stored on each event.
 </ParamField>
 
 <ParamField query="resource" type="string">
-  Filter by exact resource identifier. Exact match only.
+  Filter to events targeting a specific resource identifier, for example `session/sess_abc`. Must be an exact match.
 </ParamField>
 
 <ParamField query="date_from" type="string">
-  Filter events on or after this date, `YYYY-MM-DD` (date only, not a full timestamp). Inclusive.
+  Inclusive start date in `YYYY-MM-DD` format. Events with a `timestamp` on or after midnight UTC of this date are included.
 </ParamField>
 
 <ParamField query="date_to" type="string">
-  Filter events on or before this date, `YYYY-MM-DD` (date only, not a full timestamp). Inclusive.
+  Inclusive end date in `YYYY-MM-DD` format. Events with a `timestamp` before the end of this day (UTC) are included.
 </ParamField>
 
 <ParamField query="cursor" type="string">
-  Pagination cursor — pass the `next_cursor` value from a previous response to fetch the next page.
+  Pagination cursor. Pass the `next_cursor` value from the previous response to fetch the next page of results. Omit this parameter to start from the most recent event.
 </ParamField>
 
 <ParamField query="limit" type="integer" default="50">
-  Number of events to return. Minimum 1, maximum 100 — values outside that range fall back to the default of 50.
+  Number of events to return per page. Minimum `1`, maximum `100`. Any value outside this range is silently clamped back to the default of `50`.
 </ParamField>
 
-## Response
+## Response Fields
 
-<ResponseField name="events" type="array">
-  Array of event objects.
+<ResponseField name="events" type="array" required>
+  Ordered array of event objects, newest first.
 
-  <Expandable title="Event object">
+  <Expandable title="Event object fields">
     <ResponseField name="log_id" type="string">
-      Unique event identifier (ULID format).
+      Unique ULID identifier for this event. Monotonically increasing, making it safe to use as a sort key.
     </ResponseField>
-
     <ResponseField name="tenant_id" type="string">
-      Your organization's ID.
+      The organization identifier that owns this event.
     </ResponseField>
-
     <ResponseField name="project_id" type="string">
-      The project this event belongs to.
+      The project within the organization that this event belongs to.
     </ResponseField>
-
     <ResponseField name="schema_version" type="integer">
-      Internal event schema version.
+      Version of the event schema used when the event was recorded.
     </ResponseField>
-
     <ResponseField name="action" type="string">
-      The action that was performed.
+      The action name that was logged, for example `user.login` or `file.download`.
     </ResponseField>
-
     <ResponseField name="actor_id" type="string">
-      Who performed the action.
+      Identifier of the actor who performed the action.
     </ResponseField>
-
-    <ResponseField name="actor_type" type="string">
-      Type of actor, when set (e.g., `user`, `system`).
-    </ResponseField>
-
     <ResponseField name="resource" type="string">
-      What was affected.
+      The resource that was acted upon, such as `session/sess_abc`.
     </ResponseField>
-
-    <ResponseField name="resource_type" type="string">
-      Type of resource, when set.
-    </ResponseField>
-
-    <ResponseField name="category" type="string">
-      Category, when set (from the compliance action catalog).
-    </ResponseField>
-
-    <ResponseField name="severity" type="string">
-      Severity, when set.
-    </ResponseField>
-
-    <ResponseField name="session_id" type="string">
-      Session identifier, when set.
-    </ResponseField>
-
-    <ResponseField name="ts_client" type="string">
-      Client-supplied timestamp, when set — distinct from `timestamp` below, which is always server-assigned.
-    </ResponseField>
-
     <ResponseField name="metadata" type="object">
-      Additional context key-value pairs.
+      Arbitrary key-value payload attached when the event was ingested. Contents vary by action type.
     </ResponseField>
-
     <ResponseField name="timestamp" type="string">
-      Server timestamp when the event was received (ISO 8601).
+      ISO 8601 timestamp (UTC) recorded at ingestion time, for example `2025-01-15T10:30:00.123Z`.
     </ResponseField>
-
     <ResponseField name="ip_address" type="string">
-      Source IP address of the original API request.
+      IP address associated with the event, if provided at ingestion.
     </ResponseField>
-
     <ResponseField name="country" type="string">
-      Country code derived from source IP (e.g., `US`).
+      Two-letter ISO country code resolved from `ip_address`, for example `US`.
     </ResponseField>
-
     <ResponseField name="city" type="string">
-      City derived from source IP (e.g., `San Francisco`).
+      City name resolved from `ip_address`, for example `San Francisco`.
     </ResponseField>
-
     <ResponseField name="hash" type="string">
-      Cryptographic hash of this event in the integrity chain.
+      SHA-256 hash of this event's canonical payload. Forms part of the tamper-evident hash chain.
     </ResponseField>
-
     <ResponseField name="prev_hash" type="string">
-      Hash of the previous event in the integrity chain.
+      SHA-256 hash of the immediately preceding event. Links this event into the chain.
     </ResponseField>
-
     <ResponseField name="chain_seq" type="integer">
-      Sequential position in the hash chain.
+      Sequential position of this event in the project's hash chain.
     </ResponseField>
   </Expandable>
 </ResponseField>
 
 <ResponseField name="next_cursor" type="string">
-  Cursor for the next page — pass as the `cursor` query parameter. Empty when there are no more results.
+  Opaque cursor to pass as the `cursor` parameter on your next request. Only present when `has_more` is `true`.
 </ResponseField>
 
-<ResponseField name="has_more" type="boolean">
-  Whether more events exist beyond the current page.
+<ResponseField name="has_more" type="boolean" required>
+  `true` when additional pages of results exist beyond the current response.
 </ResponseField>
 
 <Note>
-There's no `total` field or `request_id` in the response body for this endpoint (unlike the write endpoints) — use the `X-Request-Id` response header for tracing.
+  The response does not include a `total` count field. Because audit logs can grow very large, computing an exact total on every request would be prohibitively slow. Use `has_more` and the cursor to determine whether more results exist.
 </Note>
 
-## Examples
-
-### curl
+## Example Request
 
 ```bash
 curl -G https://api.auditrails.io/v1/events \
-  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Authorization: Bearer at_live_xxx" \
   -d "action=user.login" \
   -d "date_from=2025-01-01" \
   -d "date_to=2025-01-31" \
   -d "limit=10"
 ```
 
-### 200 OK
+## Example Response
 
 ```json
 {
@@ -186,32 +150,28 @@ curl -G https://api.auditrails.io/v1/events \
 }
 ```
 
+## Pagination
+
+To page through a full result set, pass `next_cursor` from each response back as the `cursor` parameter on the next request. Repeat until `has_more` is `false`. All filter parameters must remain identical across pages — changing a filter mid-pagination produces undefined results.
+
+```bash
+# Page 1 — no cursor
+curl -G https://api.auditrails.io/v1/events \
+  -H "Authorization: Bearer at_live_xxx" \
+  -d "actor_id=user_123" \
+  -d "limit=100"
+
+# Page 2 — pass next_cursor from page 1
+curl -G https://api.auditrails.io/v1/events \
+  -H "Authorization: Bearer at_live_xxx" \
+  -d "actor_id=user_123" \
+  -d "limit=100" \
+  -d "cursor=01HX7XKQT82FM4NPWRJ6DSCBA3"
+```
+
 ## Error Responses
 
-Every error uses the same envelope — see [Error Codes](/reference/error-codes) for the full list.
-
-### 401 Unauthorized
-
-```json
-{
-  "error": {
-    "code": "auth/key_not_found",
-    "message": "API key not found. Verify the key is correct or generate a new one in the dashboard.",
-    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
-    "doc_url": "https://docs.auditrails.io/reference/error-codes"
-  }
-}
-```
-
-### 500 Internal Server Error
-
-```json
-{
-  "error": {
-    "code": "read/query_failed",
-    "message": "Failed to query events. Please retry.",
-    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
-    "doc_url": "https://docs.auditrails.io/reference/error-codes"
-  }
-}
-```
+| Status | Code | Description |
+|--------|------|-------------|
+| `401` | `auth/key_not_found` | The API key provided in the `Authorization` header is missing or invalid. |
+| `500` | `read/query_failed` | An internal error occurred while querying the event log. Retry with exponential backoff. |

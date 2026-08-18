@@ -1,79 +1,130 @@
 ---
-title: Data Retention
-description: How data retention works in AuditRails — per-plan policies, WORM storage, and automatic cleanup.
+title: "Data Retention Policies and Storage Tiers"
+sidebarTitle: "Data Retention"
+description: "Understand AuditRails' two-tier storage architecture, plan-based retention periods, deletion certificates, and DSAR handling."
 ---
 
-# Data Retention
+AuditRails stores every audit event across two independent storage tiers — a hot tier for fast search and analytics, and a cold tier for long-term immutable archiving. Retention periods are determined by your plan and, where applicable, by the compliance frameworks you have enabled. This page explains how each tier works, when data is cleaned up, and what happens when you need to delete data for a DSAR request.
 
-AuditRails enforces data retention automatically across all storage layers. You don't need to manage cleanup — it happens based on your plan.
+## Storage Tiers
 
-## Retention by Plan
-
-| Plan | Hot Storage (ClickHouse) | Cold Storage (S3 WORM) | Compliance Use |
-|------|------------------------|----------------------|----------------|
-| **Developer** | 90 days | 90 days | Development/testing |
-| **Starter** | 1 year | 1 year | SOC 2, GDPR, PCI DSS |
-| **Pro** | 1 year | 1 year | + HIPAA, ISO 27001 |
-| **Enterprise** | 7 years | 7 years | + SOX, SEC 17a-4 |
-
-## Storage Layers
-
-### Hot Storage (ClickHouse)
-
-- **Purpose:** Fast search, filtering, and analytics
-- **Cleanup:** Automatic TTL-based expiry at the partition level
-- **Performance:** Sub-second queries across billions of events
-
-### Cold Storage (S3 with Object Lock)
-
-- **Purpose:** Immutable long-term archive (WORM — Write Once Read Many)
-- **Mode:** COMPLIANCE mode — logs cannot be deleted or modified, not even by AWS root
-- **Cleanup:** Object Lock retention expires after the plan's retention period, then objects are eligible for deletion
-- **Format:** Batched JSON files with chain metadata
+<CardGroup cols={2}>
+  <Card title="Hot Storage — ClickHouse" icon="bolt">
+    Events land here first. ClickHouse provides sub-second full-text search, time-range queries, and aggregations across millions of events. Data is cleaned up via TTL-based partition drops at the end of the retention period.
+  </Card>
+  <Card title="Cold Storage — S3 Object Lock" icon="lock">
+    Every event is simultaneously written to Amazon S3 with **Object Lock in COMPLIANCE mode**. This creates a tamper-proof, immutable archive. The retention expiry is set at write time and cannot be shortened by AuditRails, your AWS account, or anyone else — including AWS support.
+  </Card>
+</CardGroup>
 
 <Info>
-S3 Object Lock in COMPLIANCE mode meets SEC Rule 17a-4(f), FINRA Rule 4511, and CFTC Rule 1.31 requirements for immutable record retention.
+  S3 Object Lock COMPLIANCE mode meets the immutable storage requirements of **SEC Rule 17a-4(f)**, **FINRA Rule 4511**, and **CFTC Regulation 1.31**, making it suitable for financial services audit trails.
 </Info>
 
-## How Cleanup Works
+---
 
-1. **Daily cleanup job** runs at 02:00 UTC
-2. Identifies data past the tenant's retention period
-3. **ClickHouse:** Drops expired partitions (partitioned by tenant + month)
-4. **S3:** Object Lock expiry is set at write time — AWS handles deletion automatically
-5. **Data deletion certificate** is generated as proof of proper disposal
+## Retention Periods by Plan
 
-## Data Deletion Certificates
+| Plan | Hot Storage (ClickHouse) | Cold Storage (S3 WORM) |
+|------|--------------------------|------------------------|
+| Developer | 90 days | 90 days |
+| Starter | 1 year | 1 year |
+| Pro | 1 year | 1 year |
+| Enterprise | 7 years | 7 years |
 
-When data is purged after the retention period expires, AuditRails generates a certificate containing:
+<Info>
+  Compliance frameworks can extend the effective retention period. For example, enabling **SOX** automatically raises your retention to **7 years**; **HIPAA** sets a **6-year** minimum; **NIS2** and **DORA** both require **5 years**. The longest applicable period always wins.
+</Info>
 
-- Tenant ID and organization name
-- Date range of deleted data
-- Number of events deleted
-- Storage layers affected
-- Timestamp of deletion
-- Hash of the certificate for verification
+### Enterprise Custom Retention
 
-These certificates are stored indefinitely and available for download in **Dashboard → Settings → Data Retention**.
+On the Enterprise plan you can configure:
 
-## DSAR and Retention
+- **Up to 10 years** of retention
+- **Per-project retention** — different projects within your organisation can have different retention periods
+- **EU-only storage** — events stored exclusively in `eu-west-1` for GDPR data residency requirements (Developer, Starter, and Pro store data in `us-east-1` only)
 
-Under GDPR, data subjects can request deletion of their data. However:
+Contact your account manager or open a support ticket to configure custom Enterprise retention.
 
-- **ClickHouse:** Events containing the actor's ID are soft-deleted (marked for exclusion from queries)
-- **S3 WORM:** Cannot be modified or deleted before the retention period expires — this is documented in the DPA
-- **Legal basis:** Regulatory retention requirements (e.g., SOC 2, HIPAA) provide lawful basis for retaining audit logs even after a deletion request
+---
+
+## Cleanup Process
+
+AuditRails runs a daily cleanup job at **02:00 UTC**.
+
+<Steps>
+  <Step title="ClickHouse partition drop">
+    The cleanup job identifies ClickHouse partitions whose TTL has elapsed and drops them. Dropped partitions are unrecoverable from hot storage.
+  </Step>
+  <Step title="S3 Object Lock expiry">
+    S3 Object Lock expiry dates are set at write time. When an object's lock expires, AWS automatically makes it eligible for deletion. AuditRails does not need to take any action — the lifecycle policy handles this.
+  </Step>
+  <Step title="Data deletion certificate">
+    After each cleanup run, AuditRails generates a **data deletion certificate** for any data removed during that run.
+  </Step>
+</Steps>
+
+### Data Deletion Certificate
+
+A deletion certificate is generated every time AuditRails removes data — either through scheduled retention cleanup or in response to a DSAR deletion request. Certificates are stored indefinitely and are accessible at **Dashboard → Settings → Data Retention**.
+
+Each certificate contains:
+
+| Field | Description |
+|-------|-------------|
+| `tenant_id` | Your organisation's tenant identifier |
+| `org_name` | Your organisation's display name |
+| `date_range` | Start and end dates of the deleted data |
+| `event_count` | Total number of events deleted |
+| `storage_layers` | Which tiers were affected (hot, cold, or both) |
+| `deletion_timestamp` | Exact UTC timestamp of deletion |
+| `certificate_hash` | SHA-256 hash of the certificate contents |
+
+<Tip>
+  Deletion certificates provide auditable proof that data was purged on schedule. Include them in your evidence package for SOC 2, HIPAA, and PCI DSS audits to demonstrate that data is not retained beyond the required period.
+</Tip>
+
+---
+
+## DSAR Deletion and WORM Limitations
+
+When you submit a **right to erasure (Art.17)** request via the DSAR workflow, AuditRails handles the two storage tiers differently.
 
 <Warning>
-S3 WORM storage cannot honor right-to-erasure requests before the retention period expires. This is by design — immutability is a compliance requirement. Your DPA with AuditRails covers this exception.
+  **S3 WORM records cannot be physically deleted before the retention period expires.** This is a fundamental property of S3 Object Lock COMPLIANCE mode — no user, administrator, or even AWS can remove a locked object early. If a DSAR deletion request is received while WORM records are still within their retention window, those records are **logically marked as deleted and excluded from all reads, exports, and API responses**, but the underlying bytes remain in S3 until the lock expires.
 </Warning>
 
-## Custom Retention (Enterprise)
+| Storage tier | DSAR delete behaviour |
+|---|---|
+| ClickHouse (hot) | Soft-deleted immediately. Records are excluded from all queries and exports within seconds of the request being processed. |
+| S3 WORM (cold) | Cannot be physically deleted before lock expiry. Records are logically excluded from all reads and exports. Physically deleted automatically when the Object Lock expires. |
 
-Enterprise customers can configure:
+### Legal Basis for Retention
 
-- **Extended retention** up to 10 years for specific compliance requirements
-- **Per-project retention** — different retention periods for different data classifications
-- **Geographic retention** — EU-only storage (eu-west-1) for data residency requirements
+Retaining WORM-locked records after a deletion request is lawful under **GDPR Art.17(3)(e)**, which permits continued storage where processing is necessary for the establishment, exercise, or defence of legal claims. Audit logs serving as evidence of system activity fall within this exception.
 
-Contact sales for custom retention configuration.
+AuditRails documents this legal basis in the Data Processing Agreement (DPA) available at **Dashboard → Settings → Legal**.
+
+---
+
+## Frequently Asked Questions
+
+<Accordion title="Can I increase retention on my current plan?">
+  Retention periods are tied to your plan. To increase beyond your plan's default, either upgrade your plan or enable a compliance framework that requires a longer period (e.g., SOX for 7 years). Enterprise customers can request custom periods up to 10 years.
+</Accordion>
+
+<Accordion title="Can I decrease or disable retention?">
+  You cannot set a retention period shorter than your plan's minimum. If a compliance framework is enabled, its mandatory minimum also applies. Disabling a framework does not retroactively shorten the retention period for data already written.
+</Accordion>
+
+<Accordion title="What happens to data if I downgrade my plan?">
+  Data already written is retained for the period that was in effect at the time of writing. Downgrading your plan affects the retention period for new events going forward. Existing WORM-locked data remains locked until its original expiry date.
+</Accordion>
+
+<Accordion title="How do I prove data was deleted on schedule?">
+  Use the data deletion certificates in **Dashboard → Settings → Data Retention**. Each certificate is hashed for integrity and can be presented directly as audit evidence.
+</Accordion>
+
+<Accordion title="Where is my data stored geographically?">
+  Developer, Starter, and Pro plans store data in `us-east-1` (Northern Virginia, USA). Enterprise plans can choose `us-east-1` or `eu-west-1` (Ireland, EU). EU storage is required for GDPR data residency compliance in certain jurisdictions.
+</Accordion>

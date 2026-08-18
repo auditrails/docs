@@ -1,119 +1,125 @@
 ---
-title: Get Event
-description: Retrieve a single audit event with full hash chain details.
-api: GET /v1/events/{log_id}
+title: "Get Single Event — AuditRails API Reference"
+sidebarTitle: "Get Event"
+description: "Fetch the full detail of a single audit log event by its ULID log_id, including hash chain fields for tamper verification."
 ---
 
-# Get Event
+The Get Single Event endpoint retrieves every field stored for one specific audit log entry, identified by its `log_id`. This is useful when you need to inspect full event detail — including hash chain fields — after spotting an entry of interest in a list query or a dashboard. The response includes the same fields available in the list endpoint, plus additional enrichment fields such as `actor_type`, `resource_type`, `category`, `severity`, and `session_id`.
 
-Retrieve a single audit event by its `log_id`, including hash chain information for verification.
+## Endpoint
+
+```
+GET https://api.auditrails.io/v1/events/{log_id}
+```
 
 ## Path Parameters
 
 <ParamField path="log_id" type="string" required>
-  The unique event identifier (ULID format, e.g., `01HX7YGBFZ3QK8N9VMJT5RPCE4`).
+  The ULID identifier of the event to retrieve, for example `01HX7YGBFZ3QK8N9VMJT5RPCE4`. ULIDs are case-insensitive and 26 characters long. Passing a malformed value returns a `404`.
 </ParamField>
 
-## Response
+## Response Fields
 
-<ResponseField name="log_id" type="string">
-  Unique event identifier (ULID format).
+<ResponseField name="log_id" type="string" required>
+  Unique ULID identifier for this event.
 </ResponseField>
 
-<ResponseField name="tenant_id" type="string">
-  Your organization's ID.
+<ResponseField name="tenant_id" type="string" required>
+  The organization that owns this event.
 </ResponseField>
 
-<ResponseField name="project_id" type="string">
-  The project this event belongs to.
+<ResponseField name="project_id" type="string" required>
+  The project within the organization this event belongs to.
 </ResponseField>
 
-<ResponseField name="schema_version" type="integer">
-  Internal event schema version.
+<ResponseField name="schema_version" type="integer" required>
+  Version of the event schema used at ingestion time.
 </ResponseField>
 
-<ResponseField name="action" type="string">
-  The action that was performed.
+<ResponseField name="action" type="string" required>
+  The logged action name, for example `user.login`.
 </ResponseField>
 
-<ResponseField name="actor_id" type="string">
-  Who performed the action.
+<ResponseField name="actor_id" type="string" required>
+  Identifier of the actor who triggered the action.
 </ResponseField>
 
 <ResponseField name="actor_type" type="string">
-  Type of actor, when set.
+  Semantic type of the actor, for example `user`, `service`, or `system`. Present when supplied at ingestion.
 </ResponseField>
 
-<ResponseField name="resource" type="string">
-  What was affected.
+<ResponseField name="resource" type="string" required>
+  The resource that was acted upon, for example `session/sess_abc`.
 </ResponseField>
 
 <ResponseField name="resource_type" type="string">
-  Type of resource, when set.
+  Semantic type of the resource, for example `session` or `document`. Present when supplied at ingestion.
 </ResponseField>
 
 <ResponseField name="category" type="string">
-  Category, when set (from the compliance action catalog).
+  High-level grouping for the action, for example `auth` or `data_access`. Derived from the action catalog.
 </ResponseField>
 
 <ResponseField name="severity" type="string">
-  Severity, when set.
+  Severity level of the event, for example `info`, `warning`, or `critical`. Present when supplied at ingestion or when set by the action catalog.
 </ResponseField>
 
 <ResponseField name="session_id" type="string">
-  Session identifier, when set.
+  Session identifier linked to this event. Present when supplied at ingestion.
 </ResponseField>
 
 <ResponseField name="ts_client" type="string">
-  Client-supplied timestamp, when set — distinct from `timestamp` below, which is always server-assigned.
+  Client-supplied timestamp in ISO 8601 format. Distinct from `timestamp`, which is set server-side at ingestion. Present when supplied at ingestion.
 </ResponseField>
 
 <ResponseField name="metadata" type="object">
-  Additional context key-value pairs.
+  Arbitrary key-value payload attached at ingestion. Contents vary by action type; required and optional fields for each action are defined in the [action catalog](/api-reference/actions).
 </ResponseField>
 
-<ResponseField name="timestamp" type="string">
-  Server timestamp when the event was received (ISO 8601).
+<ResponseField name="timestamp" type="string" required>
+  ISO 8601 timestamp (UTC) recorded server-side at ingestion, for example `2025-01-15T10:30:00.123Z`.
 </ResponseField>
 
 <ResponseField name="ip_address" type="string">
-  Source IP address of the original API request.
+  IP address associated with the event, if provided at ingestion.
 </ResponseField>
 
 <ResponseField name="country" type="string">
-  Country code derived from source IP.
+  Two-letter ISO country code resolved from `ip_address`, for example `US`.
 </ResponseField>
 
 <ResponseField name="city" type="string">
-  City derived from source IP.
+  City name resolved from `ip_address`, for example `San Francisco`.
 </ResponseField>
 
-<ResponseField name="chain_seq" type="integer">
-  Position in the project's hash chain (1-indexed).
+<ResponseField name="chain_seq" type="integer" required>
+  Sequential position of this event in the project's tamper-evident hash chain.
 </ResponseField>
 
-<ResponseField name="prev_hash" type="string">
-  SHA-256 hash of the previous event in the chain. The first event in a chain has a genesis hash of 64 zeros.
+<ResponseField name="prev_hash" type="string" required>
+  SHA-256 hash of the immediately preceding event in the chain. Used to verify chain continuity.
 </ResponseField>
 
-<ResponseField name="hash" type="string">
-  SHA-256 hash of this event, computed as `SHA-256(prev_hash + canonical_payload + timestamp)`.
+<ResponseField name="hash" type="string" required>
+  SHA-256 hash of this event's canonical payload. To verify, recompute `SHA-256(prev_hash + canonical_payload + timestamp)` and compare to this value.
 </ResponseField>
 
 <Note>
-There's no `request_id` in the response body for this endpoint — use the `X-Request-Id` response header for tracing.
+  Events are scoped to the project associated with your API key. If you request a `log_id` that exists in a different project, you will receive a `404 read/not_found` response — not a `403`. This is intentional: returning a `403` would confirm that the event exists, leaking information across project boundaries.
 </Note>
 
-## Examples
+<Note>
+  The response body does not include a `request_id` field. Use the `X-Request-Id` response header when filing a support request or correlating server-side traces.
+</Note>
 
-### curl
+## Example Request
 
 ```bash
 curl https://api.auditrails.io/v1/events/01HX7YGBFZ3QK8N9VMJT5RPCE4 \
-  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx"
+  -H "Authorization: Bearer at_live_xxx"
 ```
 
-### 200 OK
+## Example Response
 
 ```json
 {
@@ -140,21 +146,7 @@ curl https://api.auditrails.io/v1/events/01HX7YGBFZ3QK8N9VMJT5RPCE4 \
 
 ## Error Responses
 
-Every error uses the same envelope — see [Error Codes](/reference/error-codes) for the full list.
-
-### 404 Not Found
-
-```json
-{
-  "error": {
-    "code": "read/not_found",
-    "message": "Event not found.",
-    "request_id": "req_01HX7YH5KP2RMWT6AJCD8BXEN7",
-    "doc_url": "https://docs.auditrails.io/reference/error-codes"
-  }
-}
-```
-
-<Note>
-Events are project-scoped. You can only retrieve events that belong to the project associated with your API key. Requesting an event from another project returns a 404, not a 403, to prevent information leakage.
-</Note>
+| Status | Code | Description |
+|--------|------|-------------|
+| `401` | `auth/key_not_found` | The API key provided in the `Authorization` header is missing or invalid. |
+| `404` | `read/not_found` | No event with the given `log_id` exists within your project. Also returned when the event exists in a different project. |

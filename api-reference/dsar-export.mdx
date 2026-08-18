@@ -1,44 +1,71 @@
 ---
-title: DSAR Export
-description: Export all audit data for a specific actor to fulfill data subject access requests.
+title: "DSAR Export — Right of Access & Data Portability"
+sidebarTitle: "DSAR Export"
+description: "Submit a Data Subject Access Request to export all audit events for a given actor, satisfying GDPR Articles 15 and 20 obligations."
 ---
 
-# DSAR Export
-
-<Warning>
-This is a **dashboard-only** feature, not a Bearer-token API endpoint. There is no `POST /v1/dsar/export` on the ingestion API — DSAR requests are submitted through the AuditRails dashboard and authenticated by your logged-in session, not an `at_live_…`/`at_test_…` API key. This page describes the real flow.
-</Warning>
-
-Export all audit events associated with a specific actor to fulfill a data subject access request (GDPR Article 15 and similar).
-
-## How to Submit a Request
-
-1. Sign in to the [AuditRails dashboard](https://app.auditrails.io) as an organization admin
-2. Go to **Settings → DSAR**
-3. Fill in the request form:
-   - **Actor ID** — must exactly match the `actor_id` used when logging events for this person
-   - **Type** — choose **Export**
-   - **Requester email** — who to notify when it's ready
-   - **Reason** — optional, free text
-4. Submit — the request is queued and processed asynchronously
-
-Only one active export request per `actor_id` can exist at a time; submitting a duplicate while one is pending or processing is rejected with a validation error on the form.
-
-## Status
-
-Each request has a status visible in the DSAR request history on the same page: `pending`, `processing`, `complete`, or `failed`.
-
-## How It Works
-
-1. You submit a DSAR export request with the actor ID, from the dashboard
-2. AuditRails scans both hot storage (ClickHouse) and cold storage (S3/Cassandra) for all events where `actor_id` matches, across the full retention period for your plan
-3. The results are compiled into a downloadable export file
-4. Once `complete`, a **Download** link appears next to the request in the DSAR history table
+When a data subject exercises their right of access or data portability under GDPR, you can fulfill that request directly from the AuditRails dashboard. DSAR Export is a **dashboard-only workflow** — there is no bearer-token API endpoint for this feature. Only organisation admins can submit and view DSAR requests, and all submissions are authenticated by your existing logged-in session at [app.auditrails.io](https://app.auditrails.io).
 
 <Info>
-Events in WORM storage are read-only copies used for the export — the originals remain untouched.
+  **GDPR legal basis — Articles 15 & 20.** Article 15 grants data subjects the right to obtain confirmation of whether their personal data is being processed and to receive a copy of that data. Article 20 extends this by allowing them to receive data in a structured, machine-readable format and to transmit it to another controller. The DSAR Export workflow in AuditRails is designed to satisfy both obligations within your audit log infrastructure.
 </Info>
 
-## Access Control
+---
 
-Only organization admins can submit or view DSAR requests (`Gate::authorize('manage', $organization)` on the Laravel side) — this is intentionally more restrictive than regular API key access, since DSAR requests handle personal data subject to compliance obligations.
+## How to submit an export request
+
+<Steps>
+  <Step title="Sign in as an organisation admin">
+    Go to [app.auditrails.io](https://app.auditrails.io) and sign in with an account that holds the **Org Admin** role. DSAR features are restricted to admins — member-level accounts will not see the DSAR section.
+  </Step>
+  <Step title="Open the DSAR panel">
+    Navigate to **Settings → DSAR** in the left-hand sidebar. You will see a submission form and a history table of all past and in-progress requests for your organisation.
+  </Step>
+  <Step title="Fill in the request form">
+    Complete the following fields:
+
+    | Field | Required | Notes |
+    |---|---|---|
+    | **Actor ID** | Yes | Must exactly match the `actor_id` value used when the events were logged. A typo or case mismatch will return an empty export. |
+    | **Type** | Yes | Select **Export**. |
+    | **Requester email** | Yes | The email address of the data subject or their representative. Used for your records only — the download link is surfaced in the dashboard, not emailed. |
+    | **Reason** | No | A free-text note for your internal records (e.g. "Subject access request received 2024-06-01"). |
+  </Step>
+  <Step title="Submit the request">
+    Click **Submit**. The request is immediately queued and processed asynchronously in the background. You will see it appear in the DSAR history table with a status of **pending**.
+  </Step>
+  <Step title="Download the export when complete">
+    Refresh the DSAR history table to monitor progress. Once the status changes to **complete**, a **Download** link appears in the row. Click it to retrieve the export file containing all matched audit events.
+  </Step>
+</Steps>
+
+---
+
+## How the export works
+
+After you submit a request, AuditRails carries out the following steps automatically:
+
+1. **Scans hot storage.** All events in ClickHouse (your active, searchable log store) where `actor_id` exactly matches the value you supplied are identified across the full retention period for your plan.
+2. **Scans cold storage.** AuditRails also searches your S3 WORM archive for matching events. Cold-storage objects are opened read-only — the originals are never modified or moved as part of this process.
+3. **Compiles the export file.** Matching events from both storage tiers are merged, deduplicated, and compiled into a single downloadable file.
+4. **Makes the download available.** The status in the DSAR history table updates to **complete** and a **Download** link appears. The link is scoped to your organisation and accessible only to Org Admins.
+
+---
+
+## Request statuses
+
+| Status | Meaning |
+|---|---|
+| `pending` | The request has been accepted and is waiting in the processing queue. No action needed. |
+| `processing` | AuditRails is actively scanning hot and cold storage for matching events. |
+| `complete` | The export file is ready. A **Download** link is visible in the DSAR history table. |
+| `failed` | Processing encountered an error. The row will display an error message. Contact [support@auditrails.io](mailto:support@auditrails.io) with the request ID shown in the table. |
+
+---
+
+## Constraints and limits
+
+- **One active request per actor at a time.** If an export request for a given `actor_id` is already in `pending` or `processing` state, submitting a second request for the same actor will be rejected. Wait for the in-flight request to reach `complete` or `failed` before resubmitting.
+- **Actor ID must be an exact match.** The lookup is case-sensitive and matches the literal string stored in the `actor_id` field at event ingestion time. There is no fuzzy matching or alias resolution.
+- **Retention scope.** The export covers all events within your plan's configured retention period. Events that have already aged out of both hot and cold storage are not recoverable and will not appear in the export. To check your retention period, go to **Settings → Organisation**.
+- **WORM originals are untouched.** Exporting events from cold storage is a read-only operation. S3 Object Lock COMPLIANCE mode prevents any modification — AuditRails reads the data without altering or unlocking the underlying objects.

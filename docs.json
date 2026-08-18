@@ -1,17 +1,13 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
+  "theme": "luma",
   "name": "AuditRails",
-  "logo": {
-    "dark": "/images/logo-dark.png",
-    "light": "/images/logo-light.png"
-  },
-  "favicon": "/images/favicon.ico",
   "colors": {
     "primary": "#3366FF",
     "light": "#5588FF",
     "dark": "#2255DD"
   },
+  "favicon": "/favicon.svg",
   "navbar": {
     "links": [
       {
@@ -51,9 +47,9 @@
           {
             "group": "Reference",
             "pages": [
+              "reference/event-schema",
               "reference/error-codes",
-              "reference/rate-limits",
-              "reference/event-schema"
+              "reference/rate-limits"
             ]
           }
         ]
@@ -62,17 +58,22 @@
         "tab": "API Reference",
         "groups": [
           {
-            "group": "Ingestion API",
+            "group": "Overview",
             "pages": [
               "api-reference/overview",
               "api-reference/authentication",
-              "api-reference/post-events",
-              "api-reference/post-events-batch",
               "api-reference/rate-limits"
             ]
           },
           {
-            "group": "Read API",
+            "group": "Ingestion",
+            "pages": [
+              "api-reference/post-events",
+              "api-reference/post-events-batch"
+            ]
+          },
+          {
+            "group": "Read & Verify",
             "pages": [
               "api-reference/get-events",
               "api-reference/get-event",
@@ -81,7 +82,7 @@
             ]
           },
           {
-            "group": "DSAR API",
+            "group": "Data Subject Requests",
             "pages": [
               "api-reference/dsar-export",
               "api-reference/dsar-delete"
@@ -97,10 +98,10 @@
             "pages": [
               "sdks/overview",
               "sdks/node",
-              "sdks/php",
               "sdks/python",
               "sdks/go",
-              "sdks/java"
+              "sdks/java",
+              "sdks/php"
             ]
           }
         ]
@@ -118,11 +119,6 @@
     "socials": {
       "github": "https://github.com/auditrails",
       "linkedin": "https://linkedin.com/company/auditrails"
-    }
-  },
-  "integrations": {
-    "plausible": {
-      "domain": "docs.auditrails.io"
     }
   },
   "api": {

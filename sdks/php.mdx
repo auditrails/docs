@@ -1,13 +1,10 @@
 ---
-title: PHP SDK
-description: Official AuditRails SDK for PHP — PSR-18 compatible, auto-flush on shutdown, fire-and-forget logging.
+title: "PHP SDK — AuditRails"
+sidebarTitle: "PHP"
+description: "Integrate AuditRails into any PHP application. PSR-18 compatible, Laravel-ready, automatic batching, and PSR-3 logger support out of the box."
 ---
 
-# PHP SDK
-
-The `auditrails/auditrails-php` package provides a PSR-18 compatible client for logging audit events from any PHP application. It buffers events in memory and automatically flushes them via `register_shutdown_function`.
-
-Source: [github.com/auditrails/auditrails-php](https://github.com/auditrails/auditrails-php)
+The AuditRails PHP SDK is a PSR-18 compatible client library for PHP 8.1 and later. Rather than bundling an HTTP client, it accepts any PSR-18 compatible implementation — Guzzle, Symfony HttpClient, or any other library you already have in your project. Events are buffered in memory and flushed in the background via `register_shutdown_function`, so your application code is never blocked by network I/O and no events are lost when the request ends.
 
 ## Installation
 
@@ -15,14 +12,17 @@ Source: [github.com/auditrails/auditrails-php](https://github.com/auditrails/aud
 composer require auditrails/auditrails-php
 ```
 
-Requires **PHP 8.1+** and a PSR-18 HTTP client (e.g. Guzzle).
+You also need a PSR-18 HTTP client and PSR-7 HTTP factories. If you are not already using one, Guzzle is a common choice:
 
 ```bash
-# If you don't already have a PSR-18 client:
-composer require guzzlehttp/guzzle
+composer require guzzlehttp/guzzle guzzlehttp/psr7
 ```
 
+Requires **PHP 8.1+**.
+
 ## Initialization
+
+Construct an `AuditRails` instance by passing a `Config` object and your PSR-18 HTTP client along with its request and stream factories.
 
 ```php
 use AuditRails\AuditRails;
@@ -38,22 +38,26 @@ $audit = new AuditRails(
 );
 ```
 
-### Config Options
+Create one instance per application lifecycle (e.g. in a service container) and reuse it throughout. The `autoShutdown` option (enabled by default) registers a `register_shutdown_function` that automatically flushes buffered events at the end of every PHP request or script.
+
+### Configuration options
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `apiKey` | `string` | **required** | Your API key (`at_live_...` or `at_test_...`) |
-| `baseUrl` | `string` | `https://api.auditrails.io` | API endpoint |
-| `batchSize` | `int` | `100` | Max events per batch (capped at 100) |
-| `maxRetries` | `int` | `3` | Retry attempts on 5xx errors |
-| `timeout` | `int` | `10` | HTTP request timeout in seconds |
-| `autoShutdown` | `bool` | `true` | Register `register_shutdown_function` for auto-flush |
+|---|---|---|---|
+| `apiKey` | `string` | *(required)* | Your AuditRails API key. |
+| `baseUrl` | `string` | `https://api.auditrails.io` | Override the API endpoint. |
+| `batchSize` | `int` | `100` | Maximum events per HTTP request. |
+| `flushInterval` | `float` | `1.0` (seconds) | Buffer flush interval. |
+| `maxRetries` | `int` | `3` | Retry attempts on `5xx` responses. |
+| `timeout` | `float` | `10.0` (seconds) | Per-request timeout in seconds. |
+| `autoShutdown` | `bool` | `true` | Register `register_shutdown_function` to flush on exit. |
+| `logger` | `LoggerInterface` | `null` | Any PSR-3 compatible logger (e.g. Monolog). |
 
-## Logging Events
+## Logging events
 
-### Buffered (fire-and-forget)
+### Buffered logging (recommended)
 
-`log()` buffers the event and never throws. Events are flushed automatically at shutdown or when the buffer is full.
+`$audit->log()` adds an `AuditEvent` to the in-memory buffer and returns immediately. The buffer is automatically flushed at the end of the request. This method **never throws**.
 
 ```php
 use AuditRails\AuditEvent;
@@ -66,9 +70,9 @@ $audit->log(new AuditEvent(
 ));
 ```
 
-### Direct (synchronous)
+### Direct (immediate) logging
 
-`logDirect()` sends immediately and returns the response. It throws on errors.
+`$audit->logDirect()` sends the event immediately and returns the API response. It **throws `AuditRailsError`** on failure.
 
 ```php
 $response = $audit->logDirect(new AuditEvent(
@@ -77,44 +81,54 @@ $response = $audit->logDirect(new AuditEvent(
     resource: 'document/doc-789',
 ));
 
-echo $response->logId;     // "01HXYZ..."
-echo $response->requestId; // "req_..."
+echo $response->logId; // "01HXYZ..."
 ```
 
-### Batch Direct
+### Direct batch logging
+
+Send multiple events in a single HTTP request, bypassing the buffer.
 
 ```php
-$response = $audit->logBatchDirect([
-    new AuditEvent(action: 'user.login', actorId: 'user_1'),
-    new AuditEvent(action: 'user.login', actorId: 'user_2'),
+$audit->logBatchDirect([
+    new AuditEvent(action: 'document.created', actorId: 'user_123', resource: 'document/doc-001'),
+    new AuditEvent(action: 'document.shared',  actorId: 'user_123', resource: 'document/doc-001'),
 ]);
-
-echo count($response->logIds); // 2
 ```
 
-## Laravel Integration
-
-### Service Provider Singleton
-
-Register the client as a singleton in `AppServiceProvider`:
+### Manual flush
 
 ```php
-// app/Providers/AppServiceProvider.php
+$audit->flush();
+```
+
+## Framework integration
+
+### Laravel
+
+**Service provider registration**
+
+Bind `AuditRails` as a singleton in your `AppServiceProvider` (or a dedicated `AuditServiceProvider`). Laravel resolves Guzzle via its built-in HTTP client, so you can pull the factory from the container.
+
+```php
 use AuditRails\AuditRails;
 use AuditRails\Config;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\HttpFactory;
+use Illuminate\Support\ServiceProvider;
 
-public function register(): void
+class AuditServiceProvider extends ServiceProvider
 {
-    $this->app->singleton(AuditRails::class, function () {
-        return new AuditRails(
-            config: new Config(apiKey: config('services.auditrails.api_key')),
-            httpClient: new Client(),
-            requestFactory: new HttpFactory(),
-            streamFactory: new HttpFactory(),
-        );
-    });
+    public function register(): void
+    {
+        $this->app->singleton(AuditRails::class, function () {
+            return new AuditRails(
+                config: new Config(apiKey: config('services.auditrails.api_key')),
+                httpClient: new Client(),
+                requestFactory: new HttpFactory(),
+                streamFactory: new HttpFactory(),
+            );
+        });
+    }
 }
 ```
 
@@ -125,22 +139,21 @@ public function register(): void
 ],
 ```
 
-### Laravel Middleware
+**Middleware**
+
+Create a reusable middleware that accepts the audit action as a route-level parameter:
 
 ```php
-// app/Http/Middleware/AuditLog.php
-namespace App\Http\Middleware;
-
-use AuditRails\AuditRails;
 use AuditRails\AuditEvent;
+use AuditRails\AuditRails;
 use Closure;
 use Illuminate\Http\Request;
 
 class AuditLog
 {
-    public function __construct(private AuditRails $audit) {}
+    public function __construct(private readonly AuditRails $audit) {}
 
-    public function handle(Request $request, Closure $next, string $action)
+    public function handle(Request $request, Closure $next, string $action): mixed
     {
         $response = $next($request);
 
@@ -149,9 +162,8 @@ class AuditLog
             actorId: $request->user()?->id,
             resource: $request->method() . ' ' . $request->path(),
             metadata: [
-                'ip' => $request->ip(),
+                'ip'     => $request->ip(),
                 'status' => $response->getStatusCode(),
-                'user_agent' => $request->userAgent(),
             ],
         ));
 
@@ -160,26 +172,20 @@ class AuditLog
 }
 ```
 
+Register the middleware alias in `bootstrap/app.php` (Laravel 11+) or `Kernel.php` (Laravel 10), then apply it to routes:
+
 ```php
 // routes/web.php
 Route::post('/documents', [DocumentController::class, 'store'])
     ->middleware('audit:document.created');
+
+Route::delete('/documents/{id}', [DocumentController::class, 'destroy'])
+    ->middleware('audit:document.deleted');
 ```
 
-### Register the Middleware
+## Error handling
 
-```php
-// bootstrap/app.php
-->withMiddleware(function (Middleware $middleware) {
-    $middleware->alias([
-        'audit' => \App\Http\Middleware\AuditLog::class,
-    ]);
-})
-```
-
-## Error Handling
-
-`log()` never throws. For `logDirect()` and `logBatchDirect()`, catch `AuditRailsError`:
+`log()` never throws. For `logDirect()` and `logBatchDirect()`, catch `AuditRailsError` to inspect the failure details.
 
 ```php
 use AuditRails\AuditRailsError;
@@ -187,52 +193,48 @@ use AuditRails\AuditRailsError;
 try {
     $audit->logDirect(new AuditEvent(action: 'user.login', actorId: 'user_123'));
 } catch (AuditRailsError $e) {
-    echo $e->statusCode;    // 429
-    echo $e->errorCode;     // "rate/limit_exceeded"
-    echo $e->requestId;     // "req_01HX..."
-    echo $e->docUrl;        // "https://docs.auditrails.io/reference/error-codes"
-    echo $e->isRetryable(); // false (true for 5xx)
+    echo $e->statusCode;                                        // HTTP status, e.g. 401
+    echo $e->errorCode;                                         // Machine-readable code, e.g. "INVALID_API_KEY"
+    echo $e->isRetryable() ? 'retryable' : 'not retryable';    // Retry hint
 }
 ```
 
-## Graceful Shutdown
+### PSR-3 logging
 
-By default, the SDK registers a `register_shutdown_function` callback that flushes all remaining events when the PHP process ends. This works automatically for web requests and CLI scripts.
-
-```php
-// autoShutdown: true (default) — events flush at the end of each request
-
-// For manual control:
-$audit = new AuditRails(
-    config: new Config(apiKey: 'at_live_...', autoShutdown: false),
-    httpClient: new Client(),
-    requestFactory: new HttpFactory(),
-    streamFactory: new HttpFactory(),
-);
-
-// Manually flush before exit
-$audit->flush();
-
-// Or close (flushes + marks client as closed)
-$audit->close();
-```
-
-## PSR-3 Logger
-
-Pass any PSR-3 compatible logger for SDK debug output:
+Pass any PSR-3 compatible logger as the `logger` argument to receive internal SDK diagnostics (retry attempts, flush failures, etc.):
 
 ```php
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 
 $logger = new Logger('auditrails');
-$logger->pushHandler(new StreamHandler('php://stderr', Logger::DEBUG));
+$logger->pushHandler(new StreamHandler('php://stderr'));
 
 $audit = new AuditRails(
-    config: new Config(apiKey: 'at_live_...'),
+    config: new Config(apiKey: $_ENV['AUDITRAILS_API_KEY']),
     httpClient: new Client(),
     requestFactory: new HttpFactory(),
     streamFactory: new HttpFactory(),
     logger: $logger,
 );
 ```
+
+## Graceful shutdown
+
+When `autoShutdown` is `true` (the default), the SDK calls `register_shutdown_function` and flushes all buffered events automatically at the end of every PHP request or CLI script. No additional configuration is required in most applications.
+
+To flush manually — for example after a large import job or before a planned maintenance window — call:
+
+```php
+$audit->flush();
+```
+
+To flush and explicitly tear down the client (useful in long-running CLI commands or queue workers):
+
+```php
+$audit->close();
+```
+
+<Note>
+  In long-running PHP processes such as queue workers (Laravel Horizon, ReactPHP, Swoole), each job runs in the same PHP process. `register_shutdown_function` fires only when the process itself exits, not between jobs. Call `$audit->flush()` at the end of each job to ensure events from that job are delivered promptly.
+</Note>

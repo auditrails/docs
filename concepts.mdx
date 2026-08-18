@@ -1,98 +1,175 @@
 ---
-title: Core Concepts
-description: Key concepts in AuditRails — tenants, projects, events, hash chains, and retention.
+title: "Core Concepts — How AuditRails Works"
+sidebarTitle: "Concepts"
+description: "Learn the core building blocks of AuditRails: organizations, projects, events, tamper-proof hash chains, dual-tier storage, retention policies, and API key scoping."
 ---
 
-# Core Concepts
+Understanding a handful of core concepts will help you design your audit logging integration correctly from the start. This page explains how AuditRails structures your data, how the tamper-proof hash chain works under the hood, where your logs are physically stored, and how long they're kept depending on your plan.
 
-## Organizations (Tenants)
+---
 
-Every AuditRails account is an **organization**. An organization is the top-level tenant — all data (events, API keys, team members) is scoped to it.
+## Organizations
 
-- Each organization has a **subscription plan** (Developer, Starter, Pro, Enterprise)
-- Team members can be **Admin**, **Member**, or **Auditor**
-- All API queries enforce `tenant_id` isolation — one org can never see another's data
+An **Organization** (also called a Tenant) is the top-level account boundary in AuditRails. Everything — your projects, events, API keys, billing, and team members — lives inside one organization. Each organization has its own independent hash chain, so events from different customers or tenants never intermingle.
+
+### Plans
+
+| Plan | Retention | Best For |
+|---|---|---|
+| Developer | 90 days | Personal projects, prototypes |
+| Starter | 1 year | Small production applications |
+| Pro | 1 year | Growing teams with multiple services |
+| Enterprise | 7 years | Regulated industries, long-term compliance |
+
+### Roles
+
+| Role | What They Can Do |
+|---|---|
+| **Admin** | Full access: manage members, billing, projects, API keys, and view all logs |
+| **Member** | Create and manage projects and API keys; view logs scoped to their projects |
+| **Auditor** | Read-only access to logs and compliance reports; cannot modify any configuration |
+
+---
 
 ## Projects
 
-Organizations contain **projects** — logical groupings of audit events. Typical usage:
+A **Project** is a logical grouping of events within your organization. Each project is scoped to one or more API keys, which means events from different applications, environments, or services are cleanly separated.
 
-- One project per application (`frontend`, `backend`, `mobile`)
-- One project per environment (`production`, `staging`)
-- One project per service (`auth-service`, `billing-service`)
+A common pattern is to create one project per environment:
 
-API keys are scoped to a project. Events logged with a key are automatically tagged with its project.
+```
+my-app-production   →  at_live_prod_xxx
+my-app-staging      →  at_live_stg_xxx
+my-app-development  →  at_test_dev_xxx
+```
+
+<Tip>
+  Use separate projects for each environment so that test events never pollute your production audit trail. Test keys (`at_test_...`) are free and rate-limited independently — they'll never count against your plan's request quota.
+</Tip>
+
+---
 
 ## Events
 
-An **audit event** records that something happened. Every event has:
+An **Event** is the atomic unit of data in AuditRails. When you call `audit.log(...)`, you are writing one event to the chain.
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `action` | **Yes** | What happened — e.g., `user.login`, `document.deleted` |
-| `actor_id` | No | Who did it — e.g., `user_123`, `system` |
-| `resource` | No | What was affected — e.g., `document/doc-456` |
-| `metadata` | No | Additional context — key/value pairs (max 10 keys, 1KB per value) |
+### Fields
 
-The SDK automatically adds `log_id` (ULID), `tenant_id`, and `timestamp`.
+<ParamField body="action" type="string" required>
+  What happened, in `resource.verb` format (e.g. `user.login`, `document.deleted`, `invoice.paid`). Maximum 255 characters. This is the only required field.
+</ParamField>
 
-### Action Naming
+<ParamField body="actor_id" type="string">
+  The identity that performed the action — typically a user ID, service account name, or API client identifier (e.g. `user_123`, `svc-billing`).
+</ParamField>
 
-Use `resource.verb` format:
+<ParamField body="resource" type="string">
+  The object that was acted upon, in `type/id` format (e.g. `session/sess_abc`, `document/doc_789`, `invoice/inv_001`).
+</ParamField>
 
-```
-user.login          user.logout         user.created
-document.created    document.updated    document.deleted
-api_key.created     api_key.revoked
-payment.processed   payment.refunded
-permission.granted  permission.revoked
-```
+<ParamField body="metadata" type="object">
+  An arbitrary JSON object for any additional context — IP addresses, request IDs, before/after values, geolocation, etc. The total request body must not exceed **256 KB**.
+</ParamField>
+
+### SDK-Injected Fields
+
+The SDK (or API ingest layer) automatically attaches these fields before hashing. You do not set them manually:
+
+| Field | Type | Description |
+|---|---|---|
+| `log_id` | ULID | Globally unique, time-sortable identifier for this event |
+| `tenant_id` | string | Your organization's identifier |
+| `timestamp` | ISO 8601 | Precise server-side ingest time in UTC |
+
+<Note>
+  Because `timestamp` is assigned server-side at ingest, it cannot be backdated. This is an intentional integrity guarantee — the chain reflects the true order events were received by AuditRails.
+</Note>
+
+---
 
 ## Hash Chains
 
-Every event is **cryptographically hash-chained** using SHA-256:
+Hash chaining is the core mechanism that makes AuditRails tamper-proof. Every event you log is cryptographically linked to every event that came before it, forming an unbroken chain where any modification — however small — is immediately detectable.
+
+### The Formula
 
 ```
 hash = SHA-256(previous_hash + canonical_payload + timestamp)
 ```
 
-- Each tenant has an independent chain
-- The first event in a chain uses a genesis hash (64 zeros)
-- If anyone modifies a log entry, the hash changes and the chain breaks
-- Chain integrity can be verified via the dashboard or the Verify API
+- **`previous_hash`** — the SHA-256 hash of the immediately preceding event in your tenant's chain.
+- **`canonical_payload`** — the deterministically serialized event fields (action, actor_id, resource, metadata).
+- **`timestamp`** — the server-assigned ingest timestamp for this event.
 
-This is the core tamper-proof mechanism — it's mathematically impossible to alter a log without detection.
+### Genesis Event
 
-## Storage
+The very first event in any tenant's chain uses a **genesis hash** as its `previous_hash`:
 
-Events are stored in two layers:
+```
+previous_hash = "0000000000000000000000000000000000000000000000000000000000000000"
+```
 
-| Layer | Technology | Purpose | Retention |
-|-------|-----------|---------|-----------|
-| **Hot** | ClickHouse | Fast search and analytics | Plan-based (90d–7y) |
-| **Cold** | S3 + Object Lock | Immutable long-term storage (WORM) | Plan-based (90d–7y) |
+That is 64 hexadecimal zeros — a well-known constant that anchors the chain.
 
-**WORM (Write Once Read Many):** S3 Object Lock in COMPLIANCE mode means that once written, logs cannot be deleted or modified — not even by AWS root. This is required for SOC 2, HIPAA, and SEC 17a-4.
+### Tamper Detection
+
+Because each hash depends on all previous hashes, modifying any single event changes its hash, which changes the next event's expected input, which invalidates every hash that follows. AuditRails continuously runs background verification jobs that re-compute and compare hashes. Any discrepancy triggers an immediate alert.
+
+```
+Event 1:  hash_1 = SHA-256(genesis_hash  + payload_1 + ts_1)
+Event 2:  hash_2 = SHA-256(hash_1        + payload_2 + ts_2)
+Event 3:  hash_3 = SHA-256(hash_2        + payload_3 + ts_3)
+              ↑
+    Change payload_2 here → hash_2 changes → hash_3 breaks → chain invalid
+```
+
+<Warning>
+  Each tenant's hash chain is completely independent. Events from different organizations never share a chain, so one tenant's data can never affect another tenant's integrity proof.
+</Warning>
+
+---
+
+## Storage Tiers
+
+AuditRails writes every event to two independent storage backends simultaneously:
+
+| Tier | Backend | Purpose |
+|---|---|---|
+| **Hot** | ClickHouse (columnar database) | Real-time search, dashboard queries, API filtering — sub-second response times |
+| **Cold** | S3 Object Lock (COMPLIANCE mode) | Long-term WORM retention — objects cannot be deleted or modified by anyone, including AuditRails |
+
+**WORM** (Write Once, Read Many) means that once an event is committed to cold storage, no user action, no admin command, and no AWS API call can remove or overwrite it before the retention period expires. This is enforced at the S3 infrastructure level, not just by software policy.
+
+---
 
 ## Retention
 
-Data retention depends on your plan:
+Retention periods are determined by your plan and begin from the event's ingest timestamp:
 
 | Plan | Hot Storage | Cold Storage (WORM) |
-|------|------------|-------------------|
+|---|---|---|
 | Developer | 90 days | 90 days |
 | Starter | 1 year | 1 year |
 | Pro | 1 year | 1 year |
 | Enterprise | 7 years | 7 years |
 
-After the retention period, data is automatically purged. A **data deletion certificate** is generated as proof.
+<Info>
+  Upgrading your plan does **not** retroactively extend the retention of existing events. Events already written are retained for the period that was active when they were ingested. New events pick up the new retention period immediately.
+</Info>
+
+---
 
 ## API Keys
 
-API keys authenticate SDK and API requests:
+API keys authenticate your requests and scope them to a specific project. AuditRails uses two key formats:
 
-- Format: `at_live_xxxxxxxxxxxxxxxxxxxx` (production) or `at_test_xxxxxxxxxxxxxxxxxxxx` (testing)
-- Keys are **hashed** (SHA-256) before storage — AuditRails never stores your raw key
-- Keys are scoped to a project
-- Keys can be revoked instantly from the dashboard
-- Test keys are free and don't count toward plan quotas
+| Format | Type | Rate Limit | Counts Against Plan? |
+|---|---|---|---|
+| `at_live_xxx` | Production | 1,000 req/s (default) | Yes |
+| `at_test_xxx` | Testing | 60 req/s (separate pool) | No |
+
+<Warning>
+  Never use `at_test_` keys in production or under real load. They are throttled to 60 req/s and do not guarantee the same durability or retention as live keys.
+</Warning>
+
+Keys are **SHA-256 hashed** before being stored in AuditRails' database. The raw key value is never persisted — if you lose it, you must revoke it and generate a new one. Each key is scoped to a single project and carries no cross-project permissions.

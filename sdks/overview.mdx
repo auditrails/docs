@@ -1,65 +1,74 @@
 ---
-title: SDK Overview
-description: Official AuditRails SDKs for 5 languages — same API contract, zero dependencies, fire-and-forget logging.
+title: "SDK Overview — AuditRails Client Libraries"
+sidebarTitle: "Overview"
+description: "Official AuditRails SDKs for Node.js, Python, Go, Java, and PHP. Zero-dependency clients with automatic batching, retries, and graceful shutdown."
 ---
 
-# SDK Overview
-
-AuditRails provides official SDKs for the 5 most popular backend languages. All SDKs implement the same API contract.
+AuditRails provides first-party client libraries for every major backend language. Each SDK shares the same core design: a fire-and-forget `log()` method that never throws, automatic batching and background flushing, exponential-backoff retries on server errors, and a graceful shutdown path that ensures no events are lost when your process exits. Pick your language below to get started in minutes.
 
 ## Available SDKs
 
-| Language | Package | Install | Repo |
-|----------|---------|---------|------|
-| [Node.js / TypeScript](/sdks/node) | `@auditrails/node` | `npm install @auditrails/node` | [GitHub](https://github.com/auditrails/auditrails-node) |
-| [PHP](/sdks/php) | `auditrails/auditrails-php` | `composer require auditrails/auditrails-php` | [GitHub](https://github.com/auditrails/auditrails-php) |
-| [Python](/sdks/python) | `auditrails` | `pip install auditrails` | [GitHub](https://github.com/auditrails/auditrails-python) |
-| [Go](/sdks/go) | `auditrails-go` | `go get github.com/auditrails/auditrails-go` | [GitHub](https://github.com/auditrails/auditrails-go) |
-| [Java](/sdks/java) | `io.auditrails:auditrails-java` | Maven / Gradle | [GitHub](https://github.com/auditrails/auditrails-java) |
+<CardGroup cols={2}>
+  <Card title="Node.js / TypeScript" icon="node-js" href="/sdks/node">
+    Install via npm. Requires Node 18+ for native `fetch`. Zero runtime dependencies.
+  </Card>
+  <Card title="Python" icon="python" href="/sdks/python">
+    Install via pip. Sync client uses `urllib` (zero deps); async client adds `httpx`.
+  </Card>
+  <Card title="Go" icon="golang" href="/sdks/go">
+    Install via `go get`. Uses only the standard `net/http` package. Zero dependencies.
+  </Card>
+  <Card title="Java" icon="java" href="/sdks/java">
+    Available on Maven Central. Uses `HttpURLConnection`. Zero dependencies.
+  </Card>
+  <Card title="PHP" icon="php" href="/sdks/php">
+    Install via Composer. PSR-18 compatible — works with Guzzle or any PSR-18 HTTP client.
+  </Card>
+</CardGroup>
 
-## Shared Behavior
+## Package references
 
-Every SDK implements these guarantees:
+| Language | Package | Install command | Repository |
+|---|---|---|---|
+| Node.js / TypeScript | `@auditrails/node` | `npm install @auditrails/node` | [github.com/auditrails/auditrails-node](https://github.com/auditrails/auditrails-node) |
+| Python | `auditrails` | `pip install auditrails` | [github.com/auditrails/auditrails-python](https://github.com/auditrails/auditrails-python) |
+| Go | `auditrails-go` | `go get github.com/auditrails/auditrails-go` | [github.com/auditrails/auditrails-go](https://github.com/auditrails/auditrails-go) |
+| Java | `io.auditrails:auditrails-java` | Maven / Gradle (see Java docs) | [github.com/auditrails/auditrails-java](https://github.com/auditrails/auditrails-java) |
+| PHP | `auditrails/auditrails-php` | `composer require auditrails/auditrails-php` | [github.com/auditrails/auditrails-php](https://github.com/auditrails/auditrails-php) |
 
-1. **`log()` never throws** — events are buffered and sent in the background. Your app is never disrupted.
-2. **Automatic batching** — events are batched (up to 100 per request) and flushed every second.
-3. **Retry with backoff** — 5xx errors are retried with exponential backoff (200ms → 400ms → 800ms).
-4. **Graceful shutdown** — buffered events are flushed on process exit.
-5. **Zero/minimal dependencies** — SDKs use stdlib HTTP clients (Node: `fetch`, Python: `urllib`, Go: `net/http`, Java: `HttpURLConnection`). PHP requires a PSR-18 HTTP client.
+## Shared behavior
 
-## Configuration Options
+All SDKs implement the same reliability guarantees regardless of language.
 
-All SDKs accept the same options:
+| Behavior | Detail |
+|---|---|
+| **Non-throwing `log()`** | The buffered `log()` method never throws or raises an exception. Errors are handled internally and, if a logger is configured, emitted there instead. |
+| **Automatic batching** | Events are buffered in memory and sent in batches of up to 100. The buffer is flushed automatically every second. |
+| **Exponential-backoff retries** | On any `5xx` response the SDK retries up to 3 times with delays of 200 ms → 400 ms → 800 ms before discarding the batch. |
+| **Graceful shutdown** | Each SDK registers a process-exit hook (`beforeExit`/`SIGTERM` in Node, `atexit` in Python, `defer client.Close()` in Go, `AutoCloseable` in Java, `register_shutdown_function` in PHP) to flush any remaining buffered events before the process terminates. |
+| **Minimal dependencies** | Node uses native `fetch`, Python uses `urllib`, Go uses `net/http`, Java uses `HttpURLConnection`, and PHP requires a PSR-18 HTTP client (e.g. Guzzle). |
+
+## Configuration options
+
+Every SDK accepts the same set of configuration options, mapped to the naming convention of each language.
 
 | Option | Default | Description |
-|--------|---------|-------------|
-| `apiKey` | **required** | Your API key (`at_live_...` or `at_test_...`) |
-| `baseUrl` | `https://api.auditrails.io` | API endpoint |
-| `batchSize` | `100` | Max events per batch |
-| `flushInterval` | `1 second` | How often to flush buffered events |
-| `maxRetries` | `3` | Retry attempts on 5xx errors |
-| `timeout` | `10 seconds` | HTTP request timeout |
+|---|---|---|
+| `apiKey` | *(required)* | Your AuditRails API key. Obtain this from the [dashboard](https://app.auditrails.io). |
+| `baseUrl` | `https://api.auditrails.io` | Override the API endpoint (useful for proxies or private deployments). |
+| `batchSize` | `100` | Maximum number of events to include in a single HTTP request. |
+| `flushInterval` | `1 second` | How often the internal buffer is flushed to the API. |
+| `maxRetries` | `3` | Number of retry attempts on `5xx` errors before a batch is discarded. |
+| `timeout` | `10 seconds` | Per-request HTTP timeout. |
 
-## Methods
+## Available methods
 
-| Method | Behavior | Throws? |
-|--------|----------|---------|
-| `log(event)` | Buffer event, send in background | **Never** |
-| `logDirect(event)` | Send immediately, return response | **Yes** |
-| `logBatchDirect(events)` | Send batch immediately | **Yes** |
-| `flush()` | Flush all buffered events | No |
-| `close()` | Flush + shut down | No |
+All SDKs expose the same four core methods.
 
-## Event Schema
-
-```json
-{
-  "action": "user.login",       // Required: what happened
-  "actor_id": "user_123",       // Optional: who did it
-  "resource": "session/sess_1", // Optional: what was affected
-  "metadata": {                 // Optional: additional context
-    "ip": "203.0.113.1",
-    "method": "oauth2"
-  }
-}
-```
+| Method | Behavior |
+|---|---|
+| `log(event)` | Adds an event to the in-memory buffer. Returns immediately. **Never throws.** The event is sent in the background as part of the next batch flush. |
+| `logDirect(event)` | Sends a single event immediately, bypassing the buffer. Returns the API response (including the `logId`). **Throws on error.** |
+| `logBatchDirect(events)` | Sends an array of events immediately in a single request, bypassing the buffer. **Throws on error.** |
+| `flush()` | Manually triggers a flush of all currently buffered events. Useful before a planned shutdown or at the end of a request lifecycle. |
+| `close()` | Flushes all buffered events and shuts down background workers. Call this during application teardown. |

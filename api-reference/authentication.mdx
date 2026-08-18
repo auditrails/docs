@@ -1,111 +1,91 @@
 ---
-title: Authentication
-description: Authenticate with the AuditRails API using Bearer tokens.
+title: "API Authentication — AuditRails API Reference"
+sidebarTitle: "Authentication"
+description: "Authenticate every AuditRails API request with a Bearer token. Learn key types, security best practices, and how to handle auth errors."
 ---
 
-# Authentication
+Every request to the AuditRails API must be authenticated using an API key passed as a Bearer token in the `Authorization` header. Keys are scoped by environment — live keys write to your production audit chain and count against your plan limits, while test keys use a separate free-tier pool and are safe to use during development and CI.
 
-All API requests require a valid API key passed as a Bearer token.
+## Obtaining an API Key
 
-## Authorization Header
+You create and manage API keys from your AuditRails dashboard. Keys are displayed **only once** at creation time and are stored as a one-way hash — if you lose a key, revoke it and create a new one.
 
-Include your API key in the `Authorization` header:
+**Dashboard → API Keys → Create API Key**
 
-```
-Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx
-```
+<Warning>
+  Copy your API key immediately after creation. AuditRails cannot show it to you again after you close the creation dialog. Store it in a secrets manager (e.g. AWS Secrets Manager, HashiCorp Vault) and never commit it to source control.
+</Warning>
 
-## API Key Formats
+---
 
-AuditRails uses prefixed API keys to distinguish environments:
+## Key Types
 
-| Prefix | Environment | Quota | Rate limit |
-|--------|------------|-------|------------|
-| `at_live_` | Production | Counts toward plan limits | Your plan's rate limit (all live plans currently 1,000 req/s) |
-| `at_test_` | Testing | Free, no quota impact | A separate, much smaller pool — 60 req/s by default, independent of plan |
+AuditRails issues two distinct key prefixes with different behaviors:
 
-<Info>
-Test keys (`at_test_`) are ideal for development and CI pipelines and do not consume your plan quota — but they do **not** behave identically to live keys. They draw from their own small, fixed rate-limit pool (`rate/test_limit_exceeded` when exceeded) rather than your plan's limit, so don't use one for production load or a load test.
-</Info>
+| Prefix | Environment | Rate Limit | Plan Usage | Recommended For |
+|---|---|---|---|---|
+| `at_live_` | Production | 1,000 req/s (default) | Yes — counts toward plan | Production applications |
+| `at_test_` | Test / sandbox | 60 req/s (shared pool) | No — always free | Local dev, CI pipelines |
 
-## curl Example
+<Warning>
+  Never use `at_test_` keys to handle production traffic. The test-key pool is shared across all customers and is not covered by uptime SLAs.
+</Warning>
+
+---
+
+## Sending the Authorization Header
+
+Pass your API key as a Bearer token in every request:
 
 ```bash
 curl -X POST https://api.auditrails.io/v1/events \
-  -H "Authorization: Bearer at_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -H "Authorization: Bearer at_live_xxx" \
   -H "Content-Type: application/json" \
   -d '{
     "action": "user.login",
-    "actor_id": "user_123",
-    "resource": "session/sess_abc",
-    "metadata": {
-      "ip": "203.0.113.1",
-      "method": "password"
-    }
+    "actor_id": "user_123"
   }'
 ```
 
-## Key Security
+The header must be formatted exactly as shown — the word `Bearer` (capital B), a single space, then your key. No other authentication schemes (Basic, API-Key header, query-string tokens) are accepted.
 
-AuditRails never stores your raw API key. Keys are hashed with SHA-256 before storage. When you authenticate, we hash the provided key and compare it against the stored hash.
+---
 
-- API keys are shown **only once** at creation
-- If you lose a key, revoke it and create a new one
-- Store keys in environment variables, never in source code
+## Authentication Errors
 
-## Error Responses
+All authentication failures return HTTP `401 Unauthorized` with a structured error body. The `code` field tells you exactly what went wrong:
 
-See [Error Codes](/reference/error-codes) for the full list. Auth-specific:
+| Error Code | Cause | Resolution |
+|---|---|---|
+| `auth/missing_header` | `Authorization` header not present. | Add `Authorization: Bearer <key>` to every request. |
+| `auth/invalid_format` | Header present but not in `Bearer <key>` form. | Check for extra spaces, missing `Bearer` prefix, or encoding issues. |
+| `auth/key_not_found` | Key does not exist in AuditRails. | Verify you copied the key correctly; create a new key if needed. |
+| `auth/key_revoked` | Key has been manually revoked. | Generate a replacement key from the dashboard. |
+| `auth/key_expired` | Key has passed its expiry date. | Rotate to a new key; consider setting a longer expiry or no expiry on the replacement. |
 
-### Missing Authorization Header
+**Example 401 response:**
 
-```json 401 Unauthorized
+```json
 {
   "error": {
-    "code": "auth/missing_header",
-    "message": "Missing Authorization header. Include 'Authorization: Bearer <api_key>' in your request.",
+    "code": "auth/key_revoked",
+    "message": "This API key has been revoked and can no longer be used.",
     "request_id": "req_01HX7YGBFZ3QK8N9VMJT5RPCE4",
     "doc_url": "https://docs.auditrails.io/reference/error-codes"
   }
 }
 ```
 
-### Invalid Header Format
+<Note>
+  The `request_id` in every error body matches the `X-Request-Id` response header. Include it when contacting AuditRails support — it lets the team look up the exact request in server-side logs.
+</Note>
 
-```json 401 Unauthorized
-{
-  "error": {
-    "code": "auth/invalid_format",
-    "message": "Invalid Authorization header format. Expected 'Bearer <api_key>'.",
-    "request_id": "req_01HX7YGBFZ3QK8N9VMJT5RPCE4",
-    "doc_url": "https://docs.auditrails.io/reference/error-codes"
-  }
-}
-```
+---
 
-### Key Not Found, Revoked, or Expired
+## Security Best Practices
 
-```json 401 Unauthorized
-{
-  "error": {
-    "code": "auth/key_not_found",
-    "message": "API key not found. Verify the key is correct or generate a new one in the dashboard.",
-    "request_id": "req_01HX7YGBFZ3QK8N9VMJT5RPCE4",
-    "doc_url": "https://docs.auditrails.io/reference/error-codes"
-  }
-}
-```
-
-`auth/key_revoked` and `auth/key_expired` follow the same shape for those specific cases.
-
-## Generating API Keys
-
-1. Open the [AuditRails dashboard](https://app.auditrails.io)
-2. Navigate to **Dashboard > API Keys**
-3. Click **Create API Key**
-4. Name the key (e.g., "Production Backend")
-5. Copy the key immediately
-
-<Warning>
-API keys are displayed only once at creation. Store it securely before closing the dialog.
-</Warning>
+- **Rotate keys regularly.** Use the dashboard to revoke old keys and issue new ones on a schedule that fits your security policy.
+- **Use separate keys per service.** Issuing one key per application or microservice limits blast radius if a key is compromised.
+- **Set expiry dates.** For short-lived jobs (e.g. batch migrations), create a key with a tight expiry window.
+- **Never expose keys client-side.** API keys must only be used from server-to-server calls. If you need to log events from a browser, proxy requests through your own backend.
+- **Monitor for unexpected usage.** The AuditRails dashboard shows per-key request counts — an unusual spike can indicate a leaked key.

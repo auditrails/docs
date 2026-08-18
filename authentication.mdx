@@ -1,50 +1,46 @@
 ---
-title: Authentication
-description: How to authenticate with the AuditRails API using API keys.
+title: "Authentication — API Keys and Security Best Practices"
+sidebarTitle: "Authentication"
+description: "Authenticate every AuditRails API request with a Bearer token. Learn key formats, how to initialize each SDK securely, and how to handle authentication errors."
 ---
 
-# Authentication
+Every request to the AuditRails API must be authenticated with an API key passed as a Bearer token. AuditRails supports two key formats — one for production traffic and one for testing — and stores only a SHA-256 hash of each key, so the raw secret is never at risk from a database breach.
 
-All AuditRails API requests require a **Bearer token** in the `Authorization` header.
+## Getting an API Key
 
-## API Key Format
+API keys are created and managed from the AuditRails Dashboard:
+
+1. Sign in at [app.auditrails.io](https://app.auditrails.io).
+2. Click **API Keys** in the left sidebar.
+3. Click **Create API Key**, enter a descriptive name, and select the project to scope it to.
+4. Copy the key from the confirmation screen immediately.
+
+<Warning>
+  Your API key is shown **only once** at creation time. AuditRails stores only a SHA-256 hash — the raw value is never saved. If you lose the key, revoke it immediately and create a replacement.
+</Warning>
+
+## Key Formats
+
+AuditRails issues two distinct key formats with different behaviors:
+
+| Prefix | Environment | Rate Limit | Counts Against Plan? | Use For |
+|---|---|---|---|---|
+| `at_live_` | Production | 1,000 req/s (default) | Yes | All real application traffic |
+| `at_test_` | Testing | 60 req/s (separate pool) | No | Local development, CI/CD pipelines |
+
+<Warning>
+  Do **not** use `at_test_` keys for production load. They are throttled to 60 req/s on a shared pool and are not subject to the same durability guarantees as live keys. Production events sent through a test key may be dropped under high load.
+</Warning>
+
+## Making Authenticated Requests
+
+Pass your API key in the `Authorization` header as a Bearer token on every request:
 
 ```
-at_live_xxxxxxxxxxxxxxxxxxxxxxxx   # Production key
-at_test_xxxxxxxxxxxxxxxxxxxxxxxx   # Test key (free, no quota)
+Authorization: Bearer at_live_...
 ```
 
-## Using Your API Key
-
-### With an SDK
-
-Pass the key when initializing the client:
-
-<CodeGroup>
-
-```typescript Node.js
-const audit = new AuditRails({ apiKey: process.env.AUDITRAILS_API_KEY });
-```
-
-```python Python
-audit = AuditRails(AuditRailsConfig(api_key=os.environ['AUDITRAILS_API_KEY']))
-```
-
-```go Go
-client, _ := auditrails.New(os.Getenv("AUDITRAILS_API_KEY"), auditrails.Options{})
-```
-
-```php PHP
-$audit = new AuditRails(new Config(apiKey: env('AUDITRAILS_API_KEY')), ...);
-```
-
-```java Java
-AuditRails audit = AuditRails.builder(System.getenv("AUDITRAILS_API_KEY")).build();
-```
-
-</CodeGroup>
-
-### With curl
+### curl Example
 
 ```bash
 curl -X POST https://api.auditrails.io/v1/events \
@@ -53,48 +49,107 @@ curl -X POST https://api.auditrails.io/v1/events \
   -d '{"action": "user.login", "actor_id": "user_123"}'
 ```
 
-## Generating API Keys
+## SDK Initialization
 
-1. Go to **Dashboard → API Keys**
-2. Click **Create API Key**
-3. Name the key (e.g., "Production Backend")
-4. Copy the key immediately — it's only shown once
+All official SDKs accept the API key at client construction time. Use an environment variable rather than hardcoding the key in source code.
 
-<Warning>
-API keys are shown only once at creation. If you lose a key, revoke it and create a new one.
-</Warning>
+<CodeGroup>
+
+```javascript Node.js
+import { AuditRails } from '@auditrails/node';
+
+const audit = new AuditRails({
+  apiKey: process.env.AUDITRAILS_API_KEY,
+});
+```
+
+```python Python
+import os
+from auditrails import AuditRails, AuditRailsConfig
+
+audit = AuditRails(
+    AuditRailsConfig(api_key=os.environ['AUDITRAILS_API_KEY'])
+)
+```
+
+```go Go
+package main
+
+import (
+    "os"
+    "github.com/auditrails/auditrails-go"
+)
+
+func main() {
+    client, _ := auditrails.New(
+        os.Getenv("AUDITRAILS_API_KEY"),
+        auditrails.Options{},
+    )
+    defer client.Close()
+}
+```
+
+```php PHP
+use AuditRails\AuditRails;
+
+$audit = new AuditRails(
+    new Config(apiKey: env('AUDITRAILS_API_KEY')),
+    new Client(),
+    new HttpFactory(),
+    new HttpFactory()
+);
+```
+
+```java Java
+import io.auditrails.AuditRails;
+
+AuditRails audit = AuditRails
+    .builder(System.getenv("AUDITRAILS_API_KEY"))
+    .build();
+```
+
+</CodeGroup>
 
 ## Security Best Practices
 
-- **Never commit API keys** to source control — use environment variables
-- **Use separate keys** for each environment (production, staging, development)
-- **Use test keys** (`at_test_...`) for development — they're free and don't affect quotas, but they also draw from a separate, much smaller rate-limit pool (60 req/s by default), so don't use one for load testing or production traffic
-- **Rotate keys** periodically — revoke old keys and create new ones
-- **Restrict access** — only team admins and members can create/revoke keys
+<Tip>
+  Following these practices ensures your API keys stay protected even if parts of your infrastructure are compromised.
+</Tip>
 
-## Key Storage
+- **Use environment variables.** Never hardcode an API key in source code, config files committed to version control, or client-side bundles. Use your platform's secrets management system (e.g. AWS Secrets Manager, GitHub Actions secrets, Doppler, `.env` files excluded from git).
 
-AuditRails never stores your raw API key. When you create a key:
+- **One key per environment.** Create separate keys for production, staging, and development. Use `at_live_` keys only for production and `at_test_` keys for development and CI. This limits the blast radius if a key is leaked.
 
-1. The raw key is generated and shown to you once
-2. A SHA-256 hash of the key is stored in our database
-3. When you make an API request, we hash the provided key and compare it
+- **Rotate keys periodically.** Generate a new key before revoking the old one to achieve zero-downtime rotation. Update your secrets store, deploy the new key, then revoke the old one from the Dashboard.
 
-This means if our database were ever compromised, your keys would not be exposed.
+- **Revoke immediately if compromised.** If you suspect a key has been exposed — in logs, a repository, or a leaked environment — revoke it from **Dashboard → API Keys** immediately. The SHA-256-hashed storage model means the raw key is not in AuditRails' database, but revocation blocks any further use.
 
-## Error Responses
+- **Never use test keys in production.** `at_test_` keys are throttled and share a separate rate-limit pool. They should never receive real user traffic.
 
-Invalid or missing authentication returns a `401 Unauthorized` response:
+## Authentication Error Responses
+
+All authentication failures return HTTP `401 Unauthorized` with a JSON body. The `code` field tells you exactly what went wrong:
+
+| Error Code | HTTP Status | Meaning |
+|---|---|---|
+| `auth/missing_header` | 401 | The `Authorization` header was not present in the request |
+| `auth/invalid_format` | 401 | The header was present but not in `Bearer <token>` format |
+| `auth/key_not_found` | 401 | The key prefix is valid but no matching key exists (may have been deleted) |
+| `auth/key_revoked` | 401 | The key exists but has been manually revoked via the Dashboard |
+| `auth/key_expired` | 401 | The key passed its expiry date (Enterprise plans support key expiry policies) |
+
+### Example Error Response
 
 ```json
 {
   "error": {
-    "code": "auth/key_not_found",
-    "message": "API key not found. Verify the key is correct or generate a new one in the dashboard.",
-    "request_id": "req_01HX...",
-    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+    "code": "auth/key_revoked",
+    "message": "The API key provided has been revoked. Please generate a new key from the AuditRails Dashboard.",
+    "status": 401
   }
 }
 ```
 
-See [Error Codes](/reference/error-codes) for the full list — `auth/missing_header`, `auth/invalid_format`, `auth/key_not_found`, `auth/key_revoked`, and `auth/key_expired` are all possible here.
+<Note>
+  All five error codes return the same HTTP status (`401`). Use the `error.code` field in your error handling logic to distinguish between a missing header (likely a misconfiguration) and a revoked key (likely a security event that requires immediate attention).
+</Note>
