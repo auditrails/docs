@@ -11,7 +11,7 @@
     "light": "#5588FF",
     "dark": "#2255DD"
   },
-  "favicon": "/images/favicon.svg",
+  "favicon": "/images/favicon.ico",
   "navbar": {
     "links": [
       {
