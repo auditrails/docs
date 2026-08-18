@@ -23,28 +23,17 @@ AuditRails stores every audit event across two independent storage tiers — a h
 
 ---
 
-## Retention Periods by Plan
+## Retention Periods
 
-| Plan | Hot Storage | Cold Storage (S3 WORM) |
-|------|-------------|------------------------|
-| Developer | 90 days | 90 days |
-| Starter Trails | 1 year | 1 year |
-| Framework Trails | 1 year | 1 year |
-| Compliance Trails | Unlimited | Unlimited |
+Every plan — Starter Trails, Framework Trails, and Compliance Trails — includes the same base retention, applied identically to both storage tiers:
+
+| | Hot Storage | Cold Storage (S3 WORM) |
+|---|---|---|
+| Base retention (all plans) | 180 days | 180 days |
 
 <Info>
-  Compliance frameworks can extend the effective retention period. For example, enabling **SOX** automatically raises your retention to **7 years**; **HIPAA** sets a **6-year** minimum; **NIS2** and **DORA** both require **5 years**. The longest applicable period always wins.
+  Compliance frameworks can extend the effective retention period. For example, enabling **SOX** automatically raises your retention to **7 years**; **HIPAA** sets a **6-year** minimum; **NIS2** and **DORA** both require **5 years**. The longest applicable period always wins, and this applies on any plan that has the relevant framework enabled — retention is not itself a plan-tier feature.
 </Info>
-
-### Compliance Trails Custom Retention
-
-On Compliance Trails you can configure:
-
-- **Custom retention periods** up to 10 years
-- **Per-project retention** — different projects within your organisation can have different retention periods
-- **EU-only storage** — events stored exclusively in `eu-west-1` for GDPR data residency requirements (Developer, Starter Trails, and Framework Trails store data in `us-east-1` only)
-
-Contact your account manager or open a support ticket to configure custom Compliance Trails retention.
 
 ---
 
@@ -109,16 +98,16 @@ AuditRails documents this legal basis in the Data Processing Agreement (DPA) ava
 
 ## Frequently Asked Questions
 
-<Accordion title="Can I increase retention on my current plan?">
-  Retention periods are tied to your plan. To increase beyond your plan's default, either upgrade your plan or enable a compliance framework that requires a longer period (e.g., SOX for 7 years). Compliance Trails customers can request custom periods up to 10 years.
+<Accordion title="Can I increase retention beyond the 180-day base?">
+  The 180-day base retention is the same on every plan. To extend it, enable a compliance framework that requires a longer minimum (e.g., SOX for 7 years, HIPAA for 6 years, NIS2 or DORA for 5 years) — the longest applicable minimum always wins. There is currently no self-service or account-manager-mediated way to set a custom retention period independent of an enabled framework.
 </Accordion>
 
 <Accordion title="Can I decrease or disable retention?">
-  You cannot set a retention period shorter than your plan's minimum. If a compliance framework is enabled, its mandatory minimum also applies. Disabling a framework does not retroactively shorten the retention period for data already written.
+  You cannot set a retention period shorter than the 180-day base. If a compliance framework is enabled, its mandatory minimum also applies. Disabling a framework does not retroactively shorten the retention period for data already written.
 </Accordion>
 
 <Accordion title="What happens to data if I downgrade my plan?">
-  Data already written is retained for the period that was in effect at the time of writing. Downgrading your plan affects the retention period for new events going forward. Existing WORM-locked data remains locked until its original expiry date.
+  Data already written is retained for the period that was in effect at the time of writing. Since retention is driven by which compliance frameworks are enabled rather than by plan tier, downgrading your plan only affects retention if it also forces you below your framework limit and a framework gets disabled as a result. Existing WORM-locked data remains locked until its original expiry date regardless.
 </Accordion>
 
 <Accordion title="How do I prove data was deleted on schedule?">
@@ -126,5 +115,5 @@ AuditRails documents this legal basis in the Data Processing Agreement (DPA) ava
 </Accordion>
 
 <Accordion title="Where is my data stored geographically?">
-  Developer, Starter Trails, and Framework Trails store data in `us-east-1` (Northern Virginia, USA). Compliance Trails can choose `us-east-1` or `eu-west-1` (Ireland, EU). EU storage is required for GDPR data residency compliance in certain jurisdictions.
+  Starter Trails and Framework Trails store data in `us-east-1` (Northern Virginia, USA). Compliance Trails can choose `us-east-1` or `eu-west-1` (Ireland, EU). EU storage is required for GDPR data residency compliance in certain jurisdictions.
 </Accordion>

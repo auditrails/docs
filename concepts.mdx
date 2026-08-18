@@ -14,12 +14,13 @@ An **Organization** (also called a Tenant) is the top-level account boundary in 
 
 ### Plans
 
-| Plan | Retention | Best For |
+| Plan | Frameworks | Best For |
 |---|---|---|
-| Developer | 90 days | Personal projects, prototypes |
-| Starter Trails | 1 year | Small production applications |
-| Framework Trails | 1 year | Growing teams with multiple services |
-| Compliance Trails | 7 years | Regulated industries, long-term compliance |
+| Starter Trails | 1, chosen at signup and locked | Small production applications |
+| Framework Trails | Up to 3, add/remove/swap self-service | Growing teams with multiple services |
+| Compliance Trails | All 18, unlimited | Regulated industries, long-term compliance |
+
+All plans include the same 180-day base retention — see [Retention](#retention) below for how enabling a compliance framework can extend it.
 
 ### Roles
 
@@ -144,14 +145,13 @@ AuditRails writes every event to two independent storage backends simultaneously
 
 ## Retention
 
-Retention periods are determined by your plan and begin from the event's ingest timestamp:
+Every plan includes the same base retention, applied identically to both storage tiers, and begins from the event's ingest timestamp:
 
-| Plan | Hot Storage | Cold Storage (WORM) |
+| | Hot Storage | Cold Storage (WORM) |
 |---|---|---|
-| Developer | 90 days | 90 days |
-| Starter Trails | 1 year | 1 year |
-| Framework Trails | 1 year | 1 year |
-| Compliance Trails | 7 years | 7 years |
+| Base retention (all plans) | 180 days | 180 days |
+
+Enabling a compliance framework with a longer minimum retention requirement extends this automatically — the longest applicable period always wins. For example, enabling **SOX** raises effective retention to **7 years**; **HIPAA** sets a **6-year** minimum; **NIS2** and **DORA** both require **5 years**.
 
 <Info>
   Upgrading your plan does **not** retroactively extend the retention of existing events. Events already written are retained for the period that was active when they were ingested. New events pick up the new retention period immediately.

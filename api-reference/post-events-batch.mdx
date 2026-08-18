@@ -37,7 +37,7 @@ The `/v1/events/batch` endpoint lets you record up to 100 audit events in a sing
 
   <Expandable title="Event object fields">
     <ParamField body="action" type="string" required>
-      A string identifying what happened. Maximum 255 characters. We strongly recommend the `resource.verb` format (e.g. `user.login`, `document.created`, `permission.granted`).
+      A string identifying what happened. Maximum 255 characters. Must match an entry in your compliance catalog or be a registered custom action. We strongly recommend the `resource.verb` format (e.g. `user.login`, `document.created`, `permission.granted`).
     </ParamField>
 
     <ParamField body="actor_id" type="string">
