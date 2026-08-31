@@ -8,7 +8,18 @@ The AuditRails Java SDK is a zero-dependency library that uses only `HttpURLConn
 
 ## Installation
 
-Add the dependency to your build file. The artifact is published to Maven Central.
+<Warning>
+  **Not on Maven Central yet.** The `io.auditrails:auditrails-java` coordinates
+  below do not resolve; the group is reserved and publishing is pending.
+
+  Until then, either build the JAR from
+  [source](https://github.com/auditrails/auditrails-java) and install it into
+  your local repository with `mvn install`, or call
+  [`POST /v1/events`](/api-reference/events/create) directly. The SDK is a thin
+  wrapper over that single request.
+</Warning>
+
+Once published, add the dependency to your build file:
 
 <CodeGroup>
 ```xml Maven (pom.xml)
