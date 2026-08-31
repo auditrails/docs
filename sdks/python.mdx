@@ -8,29 +8,22 @@ The AuditRails Python SDK supports both synchronous and asynchronous Python appl
 
 ## Installation
 
-<Note>
-  **Not on PyPI yet**, so `pip install auditrails` does not resolve. Install
-  from Git in the meantime. Everything else on this page works unchanged.
-</Note>
-
 <Tabs>
   <Tab title="Sync (zero dependencies)">
     ```bash
-    pip install git+https://github.com/auditrails/auditrails-python.git
+    pip install auditrails
     ```
 
     The synchronous client runs a background daemon thread and flushes via `atexit`. Requires **Python 3.9+**.
   </Tab>
   <Tab title="Async (httpx)">
     ```bash
-    pip install "auditrails[async] @ git+https://github.com/auditrails/auditrails-python.git"
+    pip install "auditrails[async]"
     ```
 
     Installs `auditrails` plus `httpx`. Use `AsyncAuditRails` in `asyncio`-based applications (FastAPI, aiohttp, etc.).
   </Tab>
 </Tabs>
-
-Once it is on PyPI these become `pip install auditrails` and `pip install auditrails[async]`.
 
 ## Initialization
 

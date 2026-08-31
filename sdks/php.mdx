@@ -8,14 +8,7 @@ The AuditRails PHP SDK is a PSR-18 compatible client library for PHP 8.1 and lat
 
 ## Installation
 
-<Note>
-  **Not on Packagist yet**, so `composer require auditrails/auditrails-php`
-  does not resolve on its own. Point Composer at the Git repository first and
-  everything else on this page works unchanged.
-</Note>
-
 ```bash
-composer config repositories.auditrails vcs https://github.com/auditrails/auditrails-php
 composer require auditrails/auditrails-php
 ```
 
@@ -25,8 +18,7 @@ You also need a PSR-18 HTTP client and PSR-7 HTTP factories. If you are not alre
 composer require guzzlehttp/guzzle guzzlehttp/psr7
 ```
 
-Requires **PHP 8.1+**. Once it is on Packagist, the first `composer config`
-line is no longer needed.
+Requires **PHP 8.1+**.
 
 ## Initialization
 
