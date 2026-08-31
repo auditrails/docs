@@ -104,7 +104,6 @@
               "sdks/node",
               "sdks/python",
               "sdks/go",
-              "sdks/java",
               "sdks/php"
             ]
           }

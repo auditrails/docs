@@ -31,8 +31,6 @@ This guide walks you from zero to your first tamper-proof audit event. You'll cr
 
   <Step title="Install the SDK (or skip it)">
     <Note>
-      **Java is not on Maven Central yet** — build it from source or use the `curl` tab. The other four install normally. Full status on the [SDK overview](/sdks/overview).
-
       Every SDK is a thin wrapper over one HTTP endpoint, so the `curl` tab below works in any language today and is fully supported. Nothing in this quickstart requires an SDK.
     </Note>
 
@@ -58,11 +56,6 @@ This guide walks you from zero to your first tamper-proof audit event. You'll cr
     composer require auditrails/auditrails-php guzzlehttp/guzzle
     ```
 
-
-    ```bash Java
-    # Not on Maven Central yet. Build from source, or call
-    # POST /v1/events directly until it lands.
-    ```
 
     </CodeGroup>
   </Step>
@@ -162,25 +155,6 @@ This guide walks you from zero to your first tamper-proof audit event. You'll cr
                 "method": "password",
             },
         })
-    }
-    ```
-
-    ```java Java
-    import io.auditrails.AuditRails;
-    import io.auditrails.AuditEvent;
-    import java.util.Map;
-
-    try (AuditRails audit = AuditRails.builder("at_live_...").build()) {
-        audit.log(
-            AuditEvent.builder("user.login")
-                .actorId("user_123")
-                .resource("session/sess_abc")
-                .metadata(Map.of(
-                    "ip", "203.0.113.1",
-                    "method", "password"
-                ))
-                .build()
-        );
     }
     ```
 
