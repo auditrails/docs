@@ -4,37 +4,45 @@ sidebarTitle: "Overview"
 description: "Official AuditRails SDKs for Node.js, Python, Go, Java, and PHP. Automatic batching, exponential-backoff retries, and graceful shutdown built in."
 ---
 
-AuditRails provides first-party client libraries for every major backend language. Each SDK shares the same core design: a fire-and-forget `log()` method that never throws, automatic batching and background flushing, exponential-backoff retries on server errors, and a graceful shutdown path that ensures no events are lost when your process exits. Pick your language below to get started in minutes.
+AuditRails provides first-party client libraries for every major backend language. Each SDK shares the same core design: a fire-and-forget `log()` method that never throws, automatic batching and background flushing, exponential-backoff retries on server errors, and a graceful shutdown path that ensures no events are lost when your process exits.
+
+<Note>
+  **Node.js and Go are on their public registries.** Python, PHP and Java are published as source on GitHub, tagged `v1.0.0`, but are not yet on PyPI, Packagist or Maven Central, so `pip install auditrails` does not resolve yet.
+
+  Python and PHP install directly from Git in the meantime, and every SDK is a thin wrapper over a plain REST API you can call with `curl` today. See the table below for what works right now per language.
+</Note>
 
 ## Available SDKs
 
 <CardGroup cols={2}>
   <Card title="Node.js / TypeScript" icon="node-js" href="/sdks/node">
-    Install via npm. Requires Node 18+ for native `fetch`. Zero runtime dependencies.
-  </Card>
-  <Card title="Python" icon="python" href="/sdks/python">
-    Install via pip. Sync client uses `urllib` (zero deps); async client adds `httpx`.
+    **On npm.** Requires Node 18+ for native `fetch`. Zero runtime dependencies.
   </Card>
   <Card title="Go" icon="golang" href="/sdks/go">
-    Install via `go get`. Uses only the standard `net/http` package. Zero dependencies.
+    **On the Go proxy.** Uses only the standard `net/http` package. Zero dependencies.
   </Card>
-  <Card title="Java" icon="java" href="/sdks/java">
-    Available on Maven Central. Uses `HttpURLConnection`. Zero dependencies.
+  <Card title="Python" icon="python" href="/sdks/python">
+    **Install from Git.** Sync client uses `urllib` (zero deps); async client adds `httpx`.
   </Card>
   <Card title="PHP" icon="php" href="/sdks/php">
-    Install via Composer. PSR-18 compatible — works with Guzzle or any PSR-18 HTTP client.
+    **Install from Git.** PSR-18 compatible, works with Guzzle or any PSR-18 HTTP client.
+  </Card>
+  <Card title="Java" icon="java" href="/sdks/java">
+    **Source only for now.** Uses `HttpURLConnection`. Zero dependencies.
   </Card>
 </CardGroup>
 
 ## Package references
 
-| Language | Package | Install command | Repository |
+| Language | Registry status | How to install today | Repository |
 |---|---|---|---|
-| Node.js / TypeScript | `@auditrails/node` | `npm install @auditrails/node` | [github.com/auditrails/auditrails-node](https://github.com/auditrails/auditrails-node) |
-| Python | `auditrails` | `pip install auditrails` | [github.com/auditrails/auditrails-python](https://github.com/auditrails/auditrails-python) |
-| Go | `auditrails-go` | `go get github.com/auditrails/auditrails-go` | [github.com/auditrails/auditrails-go](https://github.com/auditrails/auditrails-go) |
-| Java | `io.auditrails:auditrails-java` | Maven / Gradle (see Java docs) | [github.com/auditrails/auditrails-java](https://github.com/auditrails/auditrails-java) |
-| PHP | `auditrails/auditrails-php` | `composer require auditrails/auditrails-php` | [github.com/auditrails/auditrails-php](https://github.com/auditrails/auditrails-php) |
+| Node.js / TypeScript | **On npm** | `npm install @auditrails/node` | [auditrails-node](https://github.com/auditrails/auditrails-node) |
+| Go | **On the Go proxy** | `go get github.com/auditrails/auditrails-go` | [auditrails-go](https://github.com/auditrails/auditrails-go) |
+| Python | Pending on PyPI | `pip install git+https://github.com/auditrails/auditrails-python.git` | [auditrails-python](https://github.com/auditrails/auditrails-python) |
+| PHP | Pending on Packagist | Composer VCS entry, see the [PHP page](/sdks/php) | [auditrails-php](https://github.com/auditrails/auditrails-php) |
+| Java | Pending on Maven Central | Build from source, see the [Java page](/sdks/java). Use the REST API. | [auditrails-java](https://github.com/auditrails/auditrails-java) |
+
+Every SDK is a thin client over the same REST endpoint. If your language is not ready yet, or you would rather not take a dependency, [`POST /v1/events`](/api-reference/post-events) is the whole interface and is fully supported.
 
 ## Shared behavior
 
