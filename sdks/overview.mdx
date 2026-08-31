@@ -1,16 +1,15 @@
 ---
 title: "AuditRails SDK Overview — Client Libraries & Packages"
 sidebarTitle: "Overview"
-description: "Official AuditRails SDKs for Node.js, Python, Go, Java, and PHP. Automatic batching, exponential-backoff retries, and graceful shutdown built in."
+description: "Official AuditRails SDKs for Node.js, Python, Go, and PHP. Automatic batching, exponential-backoff retries, and graceful shutdown built in."
 ---
 
 AuditRails provides first-party client libraries for every major backend language. Each SDK shares the same core design: a fire-and-forget `log()` method that never throws, automatic batching and background flushing, exponential-backoff retries on server errors, and a graceful shutdown path that ensures no events are lost when your process exits.
 
 <Note>
-  **Java is not on Maven Central yet.** The other four are on their public
-  registries and install normally. Java is published as source on GitHub,
-  tagged `v1.0.0`; build it from source, or call the REST API directly, which
-  is all any of these SDKs do underneath.
+  Every SDK is a thin client over one REST endpoint. If your language is not
+  listed, [`POST /v1/events`](/api-reference/post-events) is the whole
+  interface and is fully supported.
 </Note>
 
 ## Available SDKs
@@ -28,9 +27,6 @@ AuditRails provides first-party client libraries for every major backend languag
   <Card title="PHP" icon="php" href="/sdks/php">
     PSR-18 compatible, works with Guzzle or any PSR-18 HTTP client.
   </Card>
-  <Card title="Java" icon="java" href="/sdks/java">
-    **Source only for now.** Uses `HttpURLConnection`. Zero dependencies.
-  </Card>
 </CardGroup>
 
 ## Package references
@@ -41,9 +37,8 @@ AuditRails provides first-party client libraries for every major backend languag
 | Python | `auditrails` | `pip install auditrails` | [auditrails-python](https://github.com/auditrails/auditrails-python) |
 | Go | `auditrails-go` | `go get github.com/auditrails/auditrails-go` | [auditrails-go](https://github.com/auditrails/auditrails-go) |
 | PHP | `auditrails/auditrails-php` | `composer require auditrails/auditrails-php` | [auditrails-php](https://github.com/auditrails/auditrails-php) |
-| Java | not yet published | Build from source, see the [Java page](/sdks/java) | [auditrails-java](https://github.com/auditrails/auditrails-java) |
 
-Every SDK is a thin client over the same REST endpoint. If you would rather not take a dependency, [`POST /v1/events`](/api-reference/post-events) is the whole interface and is fully supported.
+If you would rather not take a dependency at all, [`POST /v1/events`](/api-reference/post-events) is the whole interface and is fully supported.
 
 ## Shared behavior
 
@@ -54,8 +49,8 @@ All SDKs implement the same reliability guarantees regardless of language.
 | **Non-throwing `log()`** | The buffered `log()` method never throws or raises an exception. Errors are handled internally and, if a logger is configured, emitted there instead. |
 | **Automatic batching** | Events are buffered in memory and sent in batches of up to 100. The buffer is flushed automatically every second. |
 | **Exponential-backoff retries** | On any `5xx` response the SDK retries up to 3 times with delays of 200 ms → 400 ms → 800 ms before discarding the batch. |
-| **Graceful shutdown** | Each SDK registers a process-exit hook (`beforeExit`/`SIGTERM` in Node, `atexit` in Python, `defer client.Close()` in Go, `AutoCloseable` in Java, `register_shutdown_function` in PHP) to flush any remaining buffered events before the process terminates. |
-| **Minimal dependencies** | Node uses native `fetch`, Python uses `urllib`, Go uses `net/http`, Java uses `HttpURLConnection`, and PHP requires a PSR-18 HTTP client (e.g. Guzzle). |
+| **Graceful shutdown** | Each SDK registers a process-exit hook (`beforeExit`/`SIGTERM` in Node, `atexit` in Python, `defer client.Close()` in Go, `register_shutdown_function` in PHP) to flush any remaining buffered events before the process terminates. |
+| **Minimal dependencies** | Node uses native `fetch`, Python uses `urllib`, Go uses `net/http`, and PHP requires a PSR-18 HTTP client (e.g. Guzzle). |
 
 ## Configuration options
 

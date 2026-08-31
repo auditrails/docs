@@ -34,7 +34,7 @@ Your App → SDK / REST API → Hash Chain → WORM Storage + Real-Time Search
     In the dashboard, go to **API Keys → Create API Key**. Copy the key — it begins with `at_live_` and is shown only once.
   </Step>
   <Step title="Install an SDK">
-    Install the SDK for your language, or skip it entirely and call the REST API. Node.js, Python, Go and PHP install from their usual package managers; Java is source-only for now. See the [SDK overview](/sdks/overview).
+    Install the SDK for your language, or skip it entirely and call the REST API. Node.js, Python, Go and PHP all install from their usual package managers. See the [SDK overview](/sdks/overview).
   </Step>
   <Step title="Log your first event">
     Call `audit.log({ action: 'user.login', actorId: 'user_123' })`. The event is hash-chained and stored in WORM storage within seconds.
@@ -54,7 +54,7 @@ Your App → SDK / REST API → Hash Chain → WORM Storage + Real-Time Search
     Built-in support for SOC 2, HIPAA, ISO 27001, GDPR, PCI DSS, NIS2, DORA, SOX, FedRAMP, EU AI Act, and more. Auto-verification included.
   </Card>
   <Card title="Drop-In SDKs" icon="code">
-    Official SDKs for Node.js, Python, Go, Java, and PHP. Fire-and-forget `log()` never blocks your application.
+    Official SDKs for Node.js, Python, Go, and PHP. Fire-and-forget `log()` never blocks your application.
   </Card>
   <Card title="Real-Time Search" icon="magnifying-glass">
     ClickHouse-powered search and filtering across billions of events. Exportable as CSV for external audit review.
