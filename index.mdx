@@ -34,7 +34,7 @@ Your App → SDK / REST API → Hash Chain → WORM Storage + Real-Time Search
     In the dashboard, go to **API Keys → Create API Key**. Copy the key — it begins with `at_live_` and is shown only once.
   </Step>
   <Step title="Install an SDK">
-    Install the SDK for your language, or skip it entirely and call the REST API. `npm install @auditrails/node` and `go get github.com/auditrails/auditrails-go` are on their registries today; Python and PHP install from Git; Java is source-only for now. See the [SDK overview](/sdks/overview) for current status per language.
+    Install the SDK for your language, or skip it entirely and call the REST API. Node.js, Python, Go and PHP install from their usual package managers; Java is source-only for now. See the [SDK overview](/sdks/overview).
   </Step>
   <Step title="Log your first event">
     Call `audit.log({ action: 'user.login', actorId: 'user_123' })`. The event is hash-chained and stored in WORM storage within seconds.
