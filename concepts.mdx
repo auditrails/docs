@@ -18,9 +18,9 @@ An **Organization** (also called a Tenant) is the top-level account boundary in 
 |---|---|---|
 | Starter Trails | 1, chosen at signup and locked | Small production applications |
 | Framework Trails | Up to 3, add/remove/swap self-service | Growing teams with multiple services |
-| Compliance Trails | All 18, unlimited | Regulated industries, long-term compliance |
+| Compliance Trails | All 8, bundled free, unlimited | Regulated industries, long-term compliance |
 
-All plans include the same 180-day base retention — see [Retention](#retention) below for how enabling a compliance framework can extend it.
+Every plan includes compliance framework logging; the tier decides how many you can run at once. All plans include the same 180-day base retention. See [Retention](#retention) below for how enabling a compliance framework can extend it.
 
 ### Roles
 
@@ -151,7 +151,7 @@ Every plan includes the same base retention, applied identically to both storage
 |---|---|---|
 | Base retention (all plans) | 180 days | 180 days |
 
-Enabling a compliance framework with a longer minimum retention requirement extends this automatically — the longest applicable period always wins. For example, enabling **SOX** raises effective retention to **7 years**; **HIPAA** sets a **6-year** minimum; **NIS2** and **DORA** both require **5 years**.
+Enabling a compliance framework with a longer minimum retention requirement extends this automatically, and the longest applicable period always wins. For example, enabling the **EU AI Act** raises effective retention to **10 years**; **DORA**, **GDPR** and **NIS2** each set a **5-year** minimum; **ISO 27001** sets **3 years**. See [Compliance Mapping](/guides/compliance-mapping#retention-at-a-glance) for the full table.
 
 <Info>
   Upgrading your plan does **not** retroactively extend the retention of existing events. Events already written are retained for the period that was active when they were ingested. New events pick up the new retention period immediately.

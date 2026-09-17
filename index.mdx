@@ -1,7 +1,7 @@
 ---
 title: "AuditRails: Tamper-Proof Audit Logging for Compliance"
 sidebarTitle: "Home"
-description: "AuditRails is a tamper-proof audit logging platform with SHA-256 hash chaining, WORM storage, and built-in compliance for SOC 2, HIPAA, GDPR, and 15 more frameworks."
+description: "AuditRails is a tamper-proof audit logging platform with SHA-256 hash chaining, WORM storage, and built-in compliance for DORA, GDPR, NIS2, the EU AI Act, ISO 27001, SOC 2, PCI DSS, and the Garante provision on system administrators."
 ---
 
 AuditRails gives you cryptographically tamper-proof audit logs with a single SDK call. Every event is SHA-256 hash-chained and written to immutable WORM storage — making it mathematically impossible to alter or delete a log entry without detection. Drop in one of the five official SDKs, and you can be logging compliance-ready audit events in under two minutes.
@@ -48,10 +48,10 @@ Your App → SDK / REST API → Hash Chain → WORM Storage + Real-Time Search
     Every event is SHA-256 linked to the previous one. Any modification or deletion instantly breaks the chain and is detectable.
   </Card>
   <Card title="WORM Storage" icon="lock">
-    Logs are written to S3 Object Lock in COMPLIANCE mode — immutable even against AWS root. Required for SOC 2, HIPAA, and SEC 17a-4.
+    Logs are written to S3 Object Lock in COMPLIANCE mode, immutable even against AWS root. Required for SOC 2, DORA Art.6, and PCI DSS Requirement 10.5.
   </Card>
-  <Card title="18 Compliance Frameworks" icon="shield-check">
-    Built-in support for SOC 2, HIPAA, ISO 27001, GDPR, PCI DSS, NIS2, DORA, SOX, FedRAMP, EU AI Act, and more. Auto-verification included.
+  <Card title="8 Compliance Frameworks" icon="shield-check">
+    Built-in support for DORA, GDPR, NIS2, the EU AI Act, ISO 27001, SOC 2, PCI DSS, and the Italian Garante provision on system administrators. Auto-verification included.
   </Card>
   <Card title="Drop-In SDKs" icon="code">
     Official SDKs for Node.js, Python, Go, and PHP. Fire-and-forget `log()` never blocks your application.
@@ -68,7 +68,7 @@ Your App → SDK / REST API → Hash Chain → WORM Storage + Real-Time Search
 
 <CardGroup cols={2}>
   <Card title="Compliance Mapping" icon="clipboard-check" href="/guides/compliance-mapping">
-    See exactly how AuditRails maps to SOC 2, HIPAA, ISO 27001, GDPR, PCI DSS, and 13 more frameworks.
+    See exactly how AuditRails maps to DORA, GDPR, NIS2, the EU AI Act, ISO 27001, SOC 2, PCI DSS, and the Garante provision on system administrators.
   </Card>
   <Card title="API Reference" icon="server" href="/api-reference/overview">
     Full REST API docs with request/response examples for ingestion, querying, and chain verification.

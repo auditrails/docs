@@ -1,10 +1,12 @@
 ---
-title: "Compliance Framework Mapping: SOC 2, HIPAA, GDPR, and More"
+title: "Compliance Framework Mapping: DORA, NIS2, GDPR, and More"
 sidebarTitle: "Compliance Mapping"
-description: "Map AuditRails events and features to all 18 supported compliance frameworks, including SOC 2, HIPAA, PCI DSS v4.0, GDPR, NIS2, DORA, and more."
+description: "Map AuditRails events and features to all 8 supported compliance frameworks: DORA, GDPR, NIS2, the EU AI Act, ISO 27001, SOC 2, the Garante provision on system administrators, and PCI DSS v4.0."
 ---
 
-AuditRails supports 18 active compliance frameworks out of the box. For each framework, specific event types, storage guarantees, and dashboard features map directly to regulatory controls — so you can demonstrate compliance without manual evidence collection. This guide covers the 10 broadest frameworks in detail, plus a summary of the remaining 8.
+AuditRails supports 8 compliance frameworks out of the box. For each one, specific event types, storage guarantees, and dashboard features map directly to regulatory controls, so you can demonstrate compliance without manual evidence collection.
+
+The authoritative list is always `GET https://app.auditrails.io/api/v1/frameworks`. If a framework is not in that response, it is not available to enable.
 
 ## Getting Started
 
@@ -12,7 +14,7 @@ Before mapping events to controls, make sure you're set up correctly.
 
 <Steps>
   <Step title="Enable a Compliance Framework">
-    Navigate to **Settings → Compliance Frameworks** and toggle on the frameworks relevant to your organization. Compliance features require a **Framework or Compliance Trail** — they are not available on Starter Trails.
+    Navigate to **Settings → Compliance Frameworks** and toggle on the frameworks relevant to your organization. Every plan includes compliance framework logging. How many you can enable at once depends on your plan: Starter Trails gets one, chosen at signup and locked; Framework Trails gets up to three, swappable self-service; Compliance Trails gets all of them, bundled free.
   </Step>
   <Step title="Review the Compliance Checklist">
     Open **Dashboard → Compliance** and select your framework. Each checklist item maps to a specific control and shows its current status.
@@ -33,58 +35,23 @@ Before mapping events to controls, make sure you're set up correctly.
 ## Framework Reference
 
 <Tabs>
-  <Tab title="SOC 2">
-    SOC 2 Trust Services Criteria require you to log access events, authentication activity, permission changes, and configuration changes — and to demonstrate that those logs cannot be tampered with.
+  <Tab title="DORA">
+    The EU Digital Operational Resilience Act (2022/2554) applies to financial entities and their ICT providers. It emphasises operational continuity, incident timelines, and third-party risk.
 
-    | Control | Event Types | AuditRails Feature |
+    | Article | Requirement | AuditRails Feature |
     |---------|-------------|-------------------|
-    | CC6.1 — Logical access | `access.granted`, `access.revoked` | Immutable audit trail |
-    | CC6.2 — Authentication | `auth.login`, `auth.logout` | Immutable audit trail |
-    | CC6.3 — Permission changes | `permission.granted`, `permission.revoked` | RBAC auditor role |
-    | CC7.2 — Monitoring | Dashboard search & CSV export | Dashboard + export |
-    | CC8.1 — Change management | `config.changed`, `deploy.completed` | Immutable audit trail |
-    | A1.2 — Availability | WORM storage | S3 Object Lock COMPLIANCE |
+    | Art.5-9 - ICT risk | Operations audit trail | Immutable trail |
+    | Art.6 - ICT governance | Hash-chained logging | Hash chain verification |
+    | Art.17-19 - Incident mgmt | Incident timelines | Timestamped incident events |
+    | Art.24-27 - Resilience testing | `vulnerability.scan` events | Event capture |
+    | Art.28-30 - Third-party risk | `access.granted` with `metadata.is_third_party` | Event capture |
 
-    **Key capabilities:** Immutable audit trail, WORM storage, RBAC auditor role (read-only access for auditors), CSV export for evidence packages.
+    **Reporting deadlines:** 4 hours (initial notification), 72 hours (intermediate report), 1 month (final report). Log `incident.detected` and `incident.notified` events to create a timestamped paper trail for each deadline.
+
+    **Retention:** 5 years (set automatically when DORA is enabled).
 
     <Info>
-      The RBAC auditor role lets you grant your external auditor read-only access to the compliance dashboard without exposing sensitive configuration settings.
-    </Info>
-  </Tab>
-
-  <Tab title="HIPAA">
-    HIPAA Security Rule requirements focus on PHI access logging, integrity controls, and authentication. Retention must be **6 years**, which AuditRails enforces automatically on Framework and Compliance Trails.
-
-    | Rule | Event Types | AuditRails Feature |
-    |------|-------------|-------------------|
-    | §164.312(b) — Audit controls | `phi.accessed`, `phi.disclosed`, `phi.amended` | Immutable trail |
-    | §164.312(c) — Integrity | Hash chaining (SHA-256) | Hash chain verification |
-    | §164.312(d) — Authentication | `auth.login`, `auth.failed` | Immutable trail |
-    | §164.308(a)(1) — Risk mgmt | Compliance dashboard | Dashboard |
-    | §164.308(a)(5) — Training | `training.completed` | Immutable trail |
-    | §164.408 — Breach notification | `breach.detected`, `breach.notified` | Immutable trail |
-
-    **Retention:** 6 years on Framework/Compliance Trails (automatic when HIPAA is enabled).
-
-    <Warning>
-      S3 WORM retention is set at write time and cannot be shortened retroactively. If a DSAR deletion request is received, hot-storage records are soft-deleted immediately, but WORM copies are logically excluded from reads and exports under GDPR Art.17(3)(e) until the retention period expires.
-    </Warning>
-  </Tab>
-
-  <Tab title="ISO 27001">
-    ISO 27001:2022 Annex A controls map closely to AuditRails' logging, monitoring, and integrity capabilities.
-
-    | Control | Requirement | AuditRails Feature |
-    |---------|-------------|-------------------|
-    | A.8.15 — Logging | Comprehensive event logging | Configurable event capture |
-    | A.8.16 — Monitoring | Continuous monitoring | Dashboard monitoring |
-    | A.8.17 — Clock sync | UTC timestamps | UTC millisecond timestamps |
-    | A.5.23 — Cloud security | Data protection | WORM + encryption + tenant isolation |
-    | A.5.25 — Information review | Auto-verification | Compliance dashboard auto-verification |
-    | A.5.26 — Incident response | Incident events | `incident.detected`, `incident.resolved` |
-
-    <Info>
-      Tenant isolation means each customer's hash chain is independent. A breach in one tenant's chain cannot affect another's, satisfying A.5.23 multi-tenancy controls.
+      DORA's Art.6 requirement for hash-chained logging is natively satisfied. Every event is chained with SHA-256, and you can verify the chain at any time via the dashboard or API.
     </Info>
   </Tab>
 
@@ -93,30 +60,17 @@ Before mapping events to controls, make sure you're set up correctly.
 
     | Article | Requirement | AuditRails Feature |
     |---------|-------------|-------------------|
-    | Art.5 — Accountability | Processing audit trail | Immutable audit trail |
-    | Art.6 — Lawful basis | `consent.given`, `consent.withdrawn` | Event capture |
-    | Art.15–20 — Subject rights | DSAR export/delete | DSAR API + Dashboard |
-    | Art.30 — Records | Auto-generated processing records | Compliance dashboard |
-    | Art.33 — Breach notification | `breach.detected`, `breach.notified` | Event capture |
-    | Art.35 — DPIA | DPIA checklist | Compliance checklist |
-  </Tab>
+    | Art.5 - Accountability | Processing audit trail | Immutable audit trail |
+    | Art.6 - Lawful basis | `consent.given`, `consent.withdrawn` | Event capture |
+    | Art.15-20 - Subject rights | DSAR export/delete | DSAR API + Dashboard |
+    | Art.30 - Records | Auto-generated processing records | Compliance dashboard |
+    | Art.33 - Breach notification | `breach.detected`, `breach.notified` | Event capture |
+    | Art.35 - DPIA | DPIA checklist | Compliance checklist |
 
-  <Tab title="PCI DSS v4.0">
-    PCI DSS v4.0 Requirement 10 mandates detailed audit logs for all access to cardholder data environments, with tamper protection and time-range search.
-
-    | Requirement | Event Types / Feature | AuditRails Mapping |
-    |-------------|----------------------|-------------------|
-    | 10.2.1 — Log access | `auth.login`, `auth.logout`, `access.granted` | Immutable trail |
-    | 10.2.2 — Admin actions | All admin events with `actor_id` | actor_id field |
-    | 10.3 — Log content | who/what/when/where/outcome | Standard event schema |
-    | 10.5 — Protect logs | WORM prevents modification | S3 Object Lock |
-    | 10.6 — Time sync | Time-range search | Dashboard search |
-    | 10.7 — Retention | Up to 7 years | Plan-based retention |
-
-    **Retention:** Up to 7 years (Compliance Trails). PCI DSS requires a minimum of 12 months with 3 months immediately available.
+    **Retention:** 5 years (set automatically when GDPR is enabled).
 
     <Tip>
-      Every event in AuditRails includes `actor_id`, `resource`, `action`, `timestamp`, IP address, and outcome fields by default — satisfying Requirement 10.3's "complete record" mandate without extra configuration.
+      `consent.given` requires `actor_id`, `metadata.legal_basis`, and `metadata.purpose`. Events missing a required field are rejected at ingest, so a passing checklist means the evidence is actually complete.
     </Tip>
   </Tab>
 
@@ -125,116 +79,143 @@ Before mapping events to controls, make sure you're set up correctly.
 
     | Article | Requirement | AuditRails Feature |
     |---------|-------------|-------------------|
-    | Art.21 — Security measures | Security events, access controls, config changes | Event capture |
-    | Art.21(2)(d) — Supply chain | Third-party access logging | Event capture |
-    | Art.21(2)(h) — Cryptography | SHA-256 + WORM + TLS 1.3 + SSE | Hash chain + S3 |
-    | Art.21(2)(i) — Auth controls | Authentication events | `auth.*` events |
-    | Art.23 — Incident reporting | `incident.detected`, `incident.notified`, `incident.resolved` with timestamps | Immutable trail |
-    | Art.20 — Governance | Management oversight dashboard | Compliance dashboard |
+    | Art.21 - Security measures | Security events, access controls, config changes | Event capture |
+    | Art.21(2)(d) - Supply chain | Third-party access logging | Event capture |
+    | Art.21(2)(h) - Cryptography | SHA-256 + WORM + TLS 1.3 + SSE | Hash chain + S3 |
+    | Art.21(2)(i) - Auth controls | Authentication events | `auth.*` events |
+    | Art.23 - Incident reporting | `incident.early_warning`, `incident.notified`, `incident.resolved` with timestamps | Immutable trail |
+    | Art.20 - Governance | Management oversight dashboard | Compliance dashboard |
+
+    **Reporting deadlines:** 24 hours (early warning), 72 hours (incident notification), 1 month (final report). `incident.early_warning` requires `actor_id`, `metadata.incident_id`, and `metadata.authority`.
 
     **Retention:** 5 years (set automatically when NIS2 is enabled).
   </Tab>
 
-  <Tab title="DORA">
-    The EU Digital Operational Resilience Act (2022/2554) applies to financial entities and their ICT providers. It emphasises operational continuity, incident timelines, and third-party risk.
+  <Tab title="EU AI Act">
+    Regulation (EU) 2024/1689 applies to providers and deployers of AI systems. Article 12 requires high-risk systems to automatically record events over their lifetime, which is exactly what an append-only, hash-chained trail provides.
 
-    | Article | Requirement | AuditRails Feature |
-    |---------|-------------|-------------------|
-    | Art.5–9 — ICT risk | Operations audit trail | Immutable trail |
-    | Art.6 — ICT governance | Hash-chained logging | Hash chain verification |
-    | Art.17–19 — Incident mgmt | Incident timelines | Timestamped incident events |
-    | Art.24–27 — Resilience testing | `vulnerability.scan` events | Event capture |
-    | Art.28–30 — Third-party risk | Third-party access logging | Event capture |
+    | Article | Requirement | Event Types |
+    |---------|-------------|-------------|
+    | Art.9 - Risk management | Continuous, documented risk review | `aiact.risk_management_review` |
+    | Art.10 - Data governance | Training data provenance | `aiact.training_data_lineage_recorded` |
+    | Art.12 - Automatic logging | Per-inference operational logs | `aiact.model_inference_logged` |
+    | Art.14 - Human oversight | Recorded human intervention | `aiact.human_oversight_intervention` |
+    | Art.43 - Conformity assessment | Assessment records | `aiact.conformity_assessment_record` |
+    | Art.50 - Transparency | Disclosure shown to the user | `aiact.transparency_disclosure_shown` |
+    | Art.72 - Post-market monitoring | Ongoing monitoring events | `aiact.post_market_monitoring_event` |
+    | Art.73 - Serious incidents | Incident reports to authorities | `aiact.serious_incident_logged` |
 
-    **Reporting deadlines:** 4 hours (initial notification), 72 hours (intermediate report), 1 month (final report). Log `incident.detected` and `incident.notified` events to create a timestamped paper trail for each deadline.
-
-    **Retention:** 5 years (set automatically when DORA is enabled).
+    **Retention:** 10 years, the longest of any framework AuditRails supports (set automatically when the EU AI Act is enabled).
 
     <Info>
-      DORA's Art.6 requirement for hash-chained logging is natively satisfied — every event is chained with SHA-256, and you can verify the chain at any time via the dashboard or API.
+      `aiact.model_inference_logged` requires `actor_id`, `resource`, `metadata.system_id`, and `metadata.model_id`. Optional fields cover `input_hash`, `output_hash`, `risk_tier`, `decision`, and `human_oversight`, which is what turns a raw inference log into Art.12 evidence.
     </Info>
   </Tab>
 
-  <Tab title="CCPA / CPRA">
-    California's CCPA and CPRA grant consumers rights over their personal information. AuditRails helps you log data access and deletion events and meet deletion deadlines.
-
-    | Section | Event Types | AuditRails Feature |
-    |---------|-------------|-------------------|
-    | §1798.100 — Right to know | `data.accessed` | Immutable trail |
-    | §1798.105 — Right to delete | `data.deleted` | Immutable trail + DSAR |
-    | §1798.106 — Right to correct | `data.updated` | Immutable trail |
-    | §1798.120 — Right to opt out | `consent.withdrawn` | Event capture |
-    | §1798.121 — Sensitive PI | Sensitive PI classification | Event metadata |
-    | §1798.150 — Enforcement | Immutable logs | WORM storage |
-
-    **Deletion deadline:** 45 days. Use the DSAR workflow to trigger and document deletion within this window.
-
-    **Retention:** 3 years (set automatically when CCPA/CPRA is enabled).
-  </Tab>
-
-  <Tab title="FedRAMP">
-    FedRAMP (based on NIST 800-53) imposes strict audit logging controls for cloud services used by US federal agencies.
+  <Tab title="ISO 27001">
+    ISO 27001:2022 Annex A controls map closely to AuditRails' logging, monitoring, and integrity capabilities.
 
     | Control | Requirement | AuditRails Feature |
     |---------|-------------|-------------------|
-    | AU-2 — Audit events | Configurable event catalog | Configurable events |
-    | AU-3 — Content | action/timestamp/actor/resource/IP/metadata | Standard event schema |
-    | AU-8 — Time stamps | UTC millisecond precision | UTC ms timestamps |
-    | AU-9 — Protection | WORM + hash chaining | S3 Object Lock + chain |
-    | AU-11 — Retention | Up to 7 years (3yr minimum) | Plan-based retention |
-    | AC-2/AC-6 — Access control | Access logs | `access.*` events |
-    | IR-4/5/6 — Incident response | Incident logs | `incident.*` events |
+    | A.8.15 - Logging | Comprehensive event logging | Configurable event capture |
+    | A.8.16 - Monitoring | Continuous monitoring | Dashboard monitoring |
+    | A.8.17 - Clock sync | UTC timestamps | UTC millisecond timestamps |
+    | A.5.23 - Cloud security | Data protection | WORM + encryption + tenant isolation |
+    | A.5.25 - Information review | Auto-verification | Compliance dashboard auto-verification |
+    | A.5.26 - Incident response | Incident events | `incident.detected`, `incident.resolved` |
+
+    **Retention:** 3 years (set automatically when ISO 27001 is enabled).
 
     <Info>
-      AU-3 requires that every log record contain sufficient information to identify what happened, when, who did it, where, and what the outcome was. AuditRails populates all these fields automatically from the event payload and server-side enrichment.
+      Tenant isolation means each customer's hash chain is independent. A breach in one tenant's chain cannot affect another's, satisfying A.5.23 multi-tenancy controls.
     </Info>
   </Tab>
 
-  <Tab title="SOX">
-    The Sarbanes-Oxley Act requires publicly traded companies to maintain tamper-proof audit trails supporting ICFR certification and IT General Controls (ITGC).
+  <Tab title="SOC 2">
+    SOC 2 Trust Services Criteria require you to log access events, authentication activity, permission changes, and configuration changes, and to demonstrate that those logs cannot be tampered with.
 
-    | Section / Control | Event Types | AuditRails Feature |
-    |-------------------|-------------|-------------------|
-    | §302 — CEO/CFO certification | Immutable trail for ICFR | WORM + hash chain |
-    | §404 — Internal controls | Compliance dashboard + CSV export | Dashboard + export |
-    | §802 — Record retention | 7-year WORM retention | S3 Object Lock |
-    | §806 — Whistleblower | `compliance.report` events | Event capture |
-    | ITGC — Access controls | `access.*` events | Immutable trail |
-    | ITGC — Segregation of duties | `permission.granted` with role metadata | Role metadata |
-    | ITGC — Change management | `change.approved`, `config.changed`, `deploy.completed` | Event capture |
+    | Control | Event Types | AuditRails Feature |
+    |---------|-------------|-------------------|
+    | CC6.1 - Logical access | `access.granted`, `access.revoked` | Immutable audit trail |
+    | CC6.2 - Authentication | `auth.login`, `auth.logout` | Immutable audit trail |
+    | CC6.3 - Permission changes | `permission.granted`, `permission.revoked` | RBAC auditor role |
+    | CC7.2 - Monitoring | Dashboard search & CSV export | Dashboard + export |
+    | CC8.1 - Change management | `config.changed`, `deploy.completed` | Immutable audit trail |
+    | A1.2 - Availability | WORM storage | S3 Object Lock COMPLIANCE |
 
-    **Retention:** Enabling SOX automatically sets your trail retention to **7 years**.
+    **Key capabilities:** Immutable audit trail, WORM storage, RBAC auditor role (read-only access for auditors), CSV export for evidence packages.
 
-    <Warning>
-      SOX §802 mandates a 7-year retention period. Once records are written to S3 WORM storage, they cannot be deleted or shortened before the retention period expires — this is a legal requirement, not a platform limitation.
-    </Warning>
+    **Retention:** 1 year (set automatically when SOC 2 is enabled).
+
+    <Info>
+      The RBAC auditor role lets you grant your external auditor read-only access to the compliance dashboard without exposing sensitive configuration settings.
+    </Info>
+  </Tab>
+
+  <Tab title="Amministratori di Sistema">
+    The Italian Garante's provision of 27 November 2008 (updated 2009) on *amministratori di sistema* requires that every administrative access to systems processing personal data be individually attributable, completely logged, tamper-proof, and retained for at least six months.
+
+    | Control | Requirement | Event Types |
+    |---------|-------------|-------------|
+    | AMS-LOG-1 - Login events | Every administrator login, with timestamp and identity | `admin.login` |
+    | AMS-LOG-2 - Logout events | Every disconnection, with timestamp | `admin.logout` |
+    | AMS-LOG-3 - Failed attempts | Failed administrator logins | `admin.login_failed` |
+    | AMS-LOG-4 - Privileged operations | Data access, config changes, user management, privilege escalation | `admin.operation`, `admin.data_access`, `admin.config_changed`, `admin.user_managed`, `admin.privilege_escalation` |
+    | AMS-ID-1/2 - Designation | Formal appointment and revocation of administrators | `admin.designated`, `admin.revoked` |
+    | AMS-AUD-1/2 - Annual review | Annual audit and review of the administrator list | `admin.verification_completed`, `admin.list_reviewed` |
+    | AMS-INT-1/2 - Log integrity | Immutable, verifiable storage | WORM + hash chain verification |
+
+    **Retention:** 1 year, which clears the provision's six-month minimum (set automatically when the framework is enabled).
+
+    <Info>
+      `admin.operation` requires `actor_id`, `resource`, `metadata.operation_type`, `metadata.before`, and `metadata.after`. The before/after pair is what makes the record evidential rather than merely a note that something changed.
+    </Info>
+  </Tab>
+
+  <Tab title="PCI DSS v4.0">
+    PCI DSS v4.0 Requirement 10 mandates detailed audit logs for all access to cardholder data environments, with tamper protection and time-range search.
+
+    | Requirement | Event Types / Feature | AuditRails Mapping |
+    |-------------|----------------------|-------------------|
+    | 10.2.1 - Log access | `auth.login`, `auth.logout`, `cardholder.accessed` | Immutable trail |
+    | 10.2.2 - Admin actions | All admin events with `actor_id` | actor_id field |
+    | 10.3 - Log content | who/what/when/where/outcome | Standard event schema |
+    | 10.5 - Protect logs | WORM prevents modification | S3 Object Lock |
+    | 10.6 - Time sync | Time-range search | Dashboard search |
+    | 10.7 - Retention | 12 months minimum | Plan-based retention |
+
+    **Retention:** 1 year (set automatically when PCI DSS is enabled). This meets Requirement 10.7's 12-month minimum with 3 months immediately available.
+
+    <Tip>
+      Every event in AuditRails includes `actor_id`, `resource`, `action`, `timestamp`, IP address, and outcome fields by default, satisfying Requirement 10.3's "complete record" mandate without extra configuration.
+    </Tip>
   </Tab>
 </Tabs>
 
 ---
 
-## Additional Frameworks
+## Retention at a Glance
 
-Beyond the 10 detailed above, AuditRails also supports:
+Enabling a framework raises your effective retention to its minimum. Where several are enabled, the longest wins.
 
-| Framework | Region | Notes |
-|-----------|--------|-------|
-| EU AI Act | EU | Articles 12, 14, 50, 72, 73 — AI system audit trails |
-| amm_sistema | Italy | Italian national framework |
-| Cyber Essentials | UK | UK NCSC baseline controls |
-| BSI C5 | Germany | Federal Office for Information Security |
-| DNB Good Practice | Netherlands | Dutch Central Bank guidelines |
-| SecNumCloud | France | ANSSI cloud security qualification |
-| UK GDPR | UK | Post-Brexit UK data protection |
-| LOPDGDD | Spain | Spanish data protection law |
+| Framework | Retention |
+|---|---|
+| EU AI Act | 10 years |
+| DORA | 5 years |
+| GDPR | 5 years |
+| NIS2 | 5 years |
+| ISO 27001 | 3 years |
+| SOC 2 | 1 year |
+| Amministratori di Sistema | 1 year |
+| PCI DSS | 1 year |
 
-Enable any of these from **Settings → Compliance Frameworks**.
+Retention is not itself a plan-tier feature. See [Data Retention](/guides/data-retention) for how the base period and framework minimums interact.
 
 ---
 
 ## Multi-Framework Coverage
 
-If your organization must satisfy multiple frameworks simultaneously, AuditRails merges their requirements. A single `auth.login` event, for example, satisfies SOC 2 CC6.2, HIPAA §164.312(d), PCI DSS 10.2.1, NIS2 Art.21(2)(i), and FedRAMP AC-2 at the same time.
+If your organization must satisfy multiple frameworks simultaneously, AuditRails merges their requirements. A single `auth.login` event, for example, satisfies SOC 2 CC6.2, PCI DSS 10.2.1, and NIS2 Art.21(2)(i) at the same time.
 
 <Tip>
   Enable all applicable frameworks before you start logging. This ensures the compliance dashboard tracks coverage across all of them from day one and that the correct retention period (the longest of all enabled frameworks) is applied.
