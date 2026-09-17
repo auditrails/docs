@@ -30,7 +30,7 @@ Applies to all requests authenticated with a live key (`at_live_...`). The limit
 
 - **Error code:** `rate/limit_exceeded`
 - **When it triggers:** Your project exceeds its plan's request rate within a single second.
-- **How to resolve:** Wait the number of seconds specified in the `Retry-After` response header, then retry. If you consistently hit this limit, consider upgrading your plan or contacting sales for a custom limit.
+- **How to resolve:** Wait the number of seconds specified in the `Retry-After` response header, then retry. If you consistently hit this limit, upgrade your plan or [get in touch](https://auditrails.io/en/contact) about a custom limit.
 
 ### 3. Test-Key Limit
 
@@ -54,9 +54,11 @@ In addition to per-second rate limits, each plan includes a monthly event quota.
 
 | Plan | Monthly Event Quota |
 |---|---|
-| Starter Trails | 250,000 events / month |
-| Framework Trails | 1,000,000 events / month |
-| Compliance Trails | Unlimited |
+| Starter Trails | 50,000 events / month |
+| Framework Trails | 250,000 events / month |
+| Compliance Trails | 1,000,000 events / month |
+
+Events beyond the included quota are billed at EUR 0.50 per 1,000. The quota is an included allowance, not a hard cap, so exceeding it does not stop ingestion.
 
 <Info>
   Your current monthly usage and remaining quota are visible on the **Dashboard → Billing** page. You will receive email notifications at 80% and 100% of your monthly quota.
@@ -128,12 +130,12 @@ For most production use cases, `log()` is the correct choice. Reserve `logDirect
 
 4. **Use live keys for production.** Test keys are limited to 60 req/s and are not suitable for any workload beyond integration testing and local development.
 
-5. **Upgrade your plan for higher monthly quotas.** If you are consistently approaching your monthly event quota, upgrade to Framework Trails or Compliance Trails — both offer significantly higher or unlimited monthly capacity.
+5. **Upgrade your plan for higher monthly quotas.** If you are consistently approaching your monthly event quota, upgrade to Framework Trails or Compliance Trails, which include five and twenty times the monthly allowance respectively.
 
 ---
 
 ## Custom Rate Limits
 
-If your use case requires a rate limit higher than your plan's default, contact the AuditRails sales team. Custom limits are available on all paid plans and are configured at the project level.
+If your use case requires a rate limit higher than your plan's default, [get in touch](https://auditrails.io/en/contact). Custom limits are available on all paid plans and are configured at the project level.
 
 [Contact us →](https://auditrails.io/en/contact)

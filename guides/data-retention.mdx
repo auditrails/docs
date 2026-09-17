@@ -25,14 +25,14 @@ AuditRails stores every audit event across two independent storage tiers — a h
 
 ## Retention Periods
 
-Every plan — Starter Trails, Framework Trails, and Compliance Trails — includes the same base retention, applied identically to both storage tiers:
+Every plan (Starter Trails, Framework Trails, and Compliance Trails) includes the same base retention, applied identically to both storage tiers:
 
 | | Hot Storage | Cold Storage (S3 WORM) |
 |---|---|---|
 | Base retention (all plans) | 180 days | 180 days |
 
 <Info>
-  Compliance frameworks can extend the effective retention period. For example, enabling **SOX** automatically raises your retention to **7 years**; **HIPAA** sets a **6-year** minimum; **NIS2** and **DORA** both require **5 years**. The longest applicable period always wins, and this applies on any plan that has the relevant framework enabled — retention is not itself a plan-tier feature.
+  Compliance frameworks can extend the effective retention period. For example, enabling the **EU AI Act** automatically raises your retention to **10 years**; **DORA**, **GDPR** and **NIS2** each set a **5-year** minimum; **ISO 27001** sets **3 years**. The longest applicable period always wins, and this applies on any plan that has the relevant framework enabled. Retention is not itself a plan-tier feature. See [Compliance Mapping](/guides/compliance-mapping#retention-at-a-glance) for every framework's minimum.
 </Info>
 
 ---
@@ -70,7 +70,7 @@ Each certificate contains:
 | `certificate_hash` | SHA-256 hash of the certificate contents |
 
 <Tip>
-  Deletion certificates provide auditable proof that data was purged on schedule. Include them in your evidence package for SOC 2, HIPAA, and PCI DSS audits to demonstrate that data is not retained beyond the required period.
+  Deletion certificates provide auditable proof that data was purged on schedule. Include them in your evidence package for SOC 2, ISO 27001, and PCI DSS audits to demonstrate that data is not retained beyond the required period.
 </Tip>
 
 ---
@@ -99,7 +99,7 @@ AuditRails documents this legal basis in the Data Processing Agreement (DPA) ava
 ## Frequently Asked Questions
 
 <Accordion title="Can I increase retention beyond the 180-day base?">
-  The 180-day base retention is the same on every plan. To extend it, enable a compliance framework that requires a longer minimum (e.g., SOX for 7 years, HIPAA for 6 years, NIS2 or DORA for 5 years) — the longest applicable minimum always wins. There is currently no self-service or account-manager-mediated way to set a custom retention period independent of an enabled framework.
+  The 180-day base retention is the same on every plan. To extend it, enable a compliance framework that requires a longer minimum (for example the EU AI Act for 10 years, or DORA, GDPR or NIS2 for 5 years). The longest applicable minimum always wins. There is currently no self-service or account-manager-mediated way to set a custom retention period independent of an enabled framework.
 </Accordion>
 
 <Accordion title="Can I decrease or disable retention?">
