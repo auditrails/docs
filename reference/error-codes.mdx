@@ -128,7 +128,7 @@ These errors relate to the action catalog and compliance framework configuration
 | `action/invalid` | `422` | The `action` value is not in the compliance catalog and is not registered as a custom action. | Check your spelling. Retrieve the full list of valid actions with `GET /v1/actions`. |
 | `action/requires_framework` | `403` | The action belongs to a compliance framework not enabled for your project. | Enable the required framework from **Dashboard → Billing → Frameworks**. |
 | `action/missing_required_fields` | `422` | The action requires additional metadata fields that were not provided. | Call `GET /v1/actions` and check the `required_fields` array for this action. |
-| `framework/disabled` | `403` | A previously enabled compliance framework has been disabled on your account. | Contact [AuditRails support](https://auditrails.io/contact) to re-enable or migrate the framework. |
+| `framework/disabled` | `403` | A previously enabled compliance framework has been disabled on your account. | Contact [AuditRails support](https://auditrails.io/en/contact) to re-enable or migrate the framework. |
 
 ---
 
@@ -153,4 +153,4 @@ If you need to escalate an error to the AuditRails support team, include the fol
 3. The **first 10 characters** of your API key prefix (e.g. `at_live_abc`) — never the full key
 4. The full **error code** (e.g. `server/internal`)
 
-Reach the support team at [auditrails.io/contact](https://auditrails.io/contact).
+Reach the support team at [auditrails.io/contact](https://auditrails.io/en/contact).
