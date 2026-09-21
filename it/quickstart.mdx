@@ -1,0 +1,194 @@
+---
+title: "Guida rapida: registra il tuo primo evento di audit in 5 minuti"
+sidebarTitle: "Guida rapida"
+description: "Crea un account gratuito AuditRails, installa l'SDK del tuo linguaggio e invia il tuo primo evento di audit a prova di manomissione in meno di cinque minuti. Nessuna carta di credito richiesta."
+---
+
+Questa guida ti accompagna da zero al tuo primo evento di audit a prova di manomissione. Creerai un account gratuito, otterrai una chiave API, installerai l'SDK per il tuo linguaggio e invierai un evento reale che potrai ispezionare subito nella dashboard di AuditRails. L'intero processo richiede circa cinque minuti.
+
+<Steps>
+
+  <Step title="Crea il tuo account gratuito">
+    Vai su [app.auditrails.io/register](https://app.auditrails.io/register) e registrati per un account gratuito. Ottieni una **prova gratuita di 30 giorni** senza carta di credito richiesta — accesso completo alla piattaforma fin dal primo giorno.
+
+    <Tip>
+      Il tuo account parte con il piano Starter Trails. Puoi effettuare l'upgrade in qualsiasi momento da **Dashboard → Fatturazione** senza perdere i dati di log esistenti.
+    </Tip>
+  </Step>
+
+  <Step title="Crea una chiave API">
+    Ogni evento viene autenticato con una chiave API associata a un progetto. Per crearne una:
+
+    1. Apri la [Dashboard di AuditRails](https://app.auditrails.io).
+    2. Vai su **Chiavi API** nella barra laterale sinistra.
+    3. Clicca **Crea chiave API**, assegnale un nome (es. `my-app-dev`) e seleziona il progetto a cui associarla.
+    4. Copia subito la chiave — inizia con `at_live_...` ed è **mostrata una sola volta**.
+
+    <Warning>
+      AuditRails memorizza solo un hash SHA-256 della tua chiave, mai il valore in chiaro. Se la perdi, dovrai revocarla e crearne una nuova. Salvala subito in un secrets manager o in una variabile d'ambiente.
+    </Warning>
+  </Step>
+
+  <Step title="Installa l'SDK (o salta questo passaggio)">
+    <Note>
+      Ogni SDK è un sottile wrapper su un singolo endpoint HTTP, quindi la scheda `curl` qui sotto funziona in qualsiasi linguaggio già oggi ed è pienamente supportata. Niente in questa guida rapida richiede un SDK.
+    </Note>
+
+    <CodeGroup>
+
+    ```bash curl (funziona ovunque)
+    # Nessuna installazione necessaria. Gli SDK avvolgono esattamente questa chiamata.
+    ```
+
+    ```bash Node.js
+    npm install @auditrails/node
+    ```
+
+    ```bash Go
+    go get github.com/auditrails/auditrails-go
+    ```
+
+    ```bash Python
+    pip install auditrails
+    ```
+
+    ```bash PHP
+    composer require auditrails/auditrails-php guzzlehttp/guzzle
+    ```
+
+
+    </CodeGroup>
+  </Step>
+
+  <Step title="Registra il tuo primo evento">
+    Invia un evento `user.login`. Sostituisci `at_live_...` con la chiave copiata al passaggio 2.
+
+    La scheda `curl` è l'intera interfaccia: ogni SDK sottostante avvolge esattamente
+    questa richiesta, quindi è il modo più veloce per confermare che la tua chiave
+    funzioni prima di aggiungere una dipendenza.
+
+    <CodeGroup>
+
+    ```bash curl
+    curl -X POST https://api.auditrails.io/v1/events \
+      -H "Authorization: Bearer at_live_..." \
+      -H "Content-Type: application/json" \
+      -d '{
+        "action": "user.login",
+        "actor_id": "usr_123",
+        "resource": "auth/session",
+        "metadata": {
+          "ip": "203.0.113.1",
+          "method": "oauth2"
+        }
+      }'
+
+    # 202 Accepted
+    # {"log_id":"01M1A6VH7SG8XEYEWK3M38XC32","request_id":"req_01M1A6VH77FA4M0CJBPWFCKA3X"}
+    ```
+
+    ```javascript Node.js
+    import { AuditRails } from '@auditrails/node';
+
+    const audit = new AuditRails({ apiKey: 'at_live_...' });
+
+    await audit.log({
+      action: 'user.login',
+      actorId: 'user_123',
+      resource: 'session/sess_abc',
+      metadata: {
+        ip: '203.0.113.1',
+        method: 'password',
+      },
+    });
+    ```
+
+    ```php PHP
+    use AuditRails\AuditRails;
+
+    $audit = new AuditRails(
+        new Config(apiKey: 'at_live_...'),
+        new Client(),
+        new HttpFactory(),
+        new HttpFactory()
+    );
+
+    $audit->log(new AuditEvent(
+        action: 'user.login',
+        actorId: 'user_123',
+        resource: 'session/sess_abc',
+        metadata: ['ip' => '203.0.113.1', 'method' => 'password']
+    ));
+    ```
+
+    ```python Python
+    from auditrails import AuditRails, AuditRailsConfig
+
+    audit = AuditRails(AuditRailsConfig(api_key='at_live_...'))
+
+    audit.log({
+        'action': 'user.login',
+        'actor_id': 'user_123',
+        'resource': 'session/sess_abc',
+        'metadata': {
+            'ip': '203.0.113.1',
+            'method': 'password',
+        },
+    })
+    ```
+
+    ```go Go
+    package main
+
+    import "github.com/auditrails/auditrails-go"
+
+    func main() {
+        client, _ := auditrails.New("at_live_...", auditrails.Options{})
+        defer client.Close()
+
+        client.Log(auditrails.Event{
+            Action:   "user.login",
+            ActorID:  "user_123",
+            Resource: "session/sess_abc",
+            Metadata: map[string]any{
+                "ip":     "203.0.113.1",
+                "method": "password",
+            },
+        })
+    }
+    ```
+
+    </CodeGroup>
+
+    <Info>
+      L'SDK associa automaticamente un `log_id` (ULID), il tuo `tenant_id` e un `timestamp` preciso a ogni evento prima che venga sottoposto a hash e archiviato. Non è mai necessario impostarli manualmente.
+    </Info>
+  </Step>
+
+  <Step title="Visualizza il tuo evento nella dashboard">
+    Apri [Dashboard → Log](https://app.auditrails.io/logs). Il tuo evento `user.login` dovrebbe comparire entro pochi secondi. Clicca su una riga qualsiasi per ispezionare:
+
+    - Il payload completo dell'evento e i metadati
+    - L'hash SHA-256 calcolato e la sua posizione nella catena
+    - Il collegamento all'hash precedente che dimostra l'integrità della catena
+    - La conferma di archiviazione WORM e la data di scadenza della conservazione
+  </Step>
+
+</Steps>
+
+## Prossimi passi
+
+<CardGroup cols={2}>
+  <Card title="Concetti fondamentali" icon="lightbulb" href="/concepts">
+    Comprendi progetti, eventi, catene di hash, livelli di archiviazione e politiche di conservazione.
+  </Card>
+  <Card title="Autenticazione" icon="key" href="/authentication">
+    Scopri i formati delle chiavi API, le best practice di sicurezza e i codici di errore.
+  </Card>
+  <Card title="Riferimento API" icon="terminal" href="/api-reference/overview">
+    Esplora ogni endpoint e campo del riferimento completo dell'API REST.
+  </Card>
+  <Card title="Guide alla conformità" icon="clipboard-check" href="/guides/compliance-mapping">
+    Scopri come AuditRails soddisfa DORA, GDPR, NIS2, l'EU AI Act e gli altri quattro framework supportati.
+  </Card>
+</CardGroup>

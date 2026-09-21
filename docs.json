@@ -34,85 +34,177 @@
     }
   },
   "navigation": {
-    "tabs": [
+    "languages": [
       {
-        "tab": "Documentation",
-        "groups": [
+        "language": "en",
+        "tabs": [
           {
-            "group": "Getting Started",
-            "pages": [
-              "introduction",
-              "quickstart",
-              "concepts",
-              "authentication"
+            "tab": "Documentation",
+            "groups": [
+              {
+                "group": "Getting Started",
+                "pages": [
+                  "introduction",
+                  "quickstart",
+                  "concepts",
+                  "authentication"
+                ]
+              },
+              {
+                "group": "Guides",
+                "pages": [
+                  "guides/compliance-mapping",
+                  "guides/hash-chain-verification",
+                  "guides/data-retention",
+                  "guides/gdpr-compliance"
+                ]
+              },
+              {
+                "group": "Reference",
+                "pages": [
+                  "reference/event-schema",
+                  "reference/error-codes",
+                  "reference/rate-limits"
+                ]
+              }
             ]
           },
           {
-            "group": "Guides",
-            "pages": [
-              "guides/compliance-mapping",
-              "guides/hash-chain-verification",
-              "guides/data-retention",
-              "guides/gdpr-compliance"
+            "tab": "API Reference",
+            "groups": [
+              {
+                "group": "Overview",
+                "pages": [
+                  "api-reference/overview",
+                  "api-reference/authentication",
+                  "api-reference/rate-limits"
+                ]
+              },
+              {
+                "group": "Ingestion",
+                "pages": [
+                  "api-reference/post-events",
+                  "api-reference/post-events-batch"
+                ]
+              },
+              {
+                "group": "Read & Verify",
+                "pages": [
+                  "api-reference/get-events",
+                  "api-reference/get-event",
+                  "api-reference/verify-chain",
+                  "api-reference/actions"
+                ]
+              },
+              {
+                "group": "Data Subject Requests",
+                "pages": [
+                  "api-reference/dsar-export",
+                  "api-reference/dsar-delete"
+                ]
+              }
             ]
           },
           {
-            "group": "Reference",
-            "pages": [
-              "reference/event-schema",
-              "reference/error-codes",
-              "reference/rate-limits"
+            "tab": "SDKs",
+            "groups": [
+              {
+                "group": "SDKs",
+                "pages": [
+                  "sdks/overview",
+                  "sdks/node",
+                  "sdks/python",
+                  "sdks/go",
+                  "sdks/php"
+                ]
+              }
             ]
           }
         ]
       },
       {
-        "tab": "API Reference",
-        "groups": [
+        "language": "it",
+        "tabs": [
           {
-            "group": "Overview",
-            "pages": [
-              "api-reference/overview",
-              "api-reference/authentication",
-              "api-reference/rate-limits"
+            "tab": "Documentazione",
+            "groups": [
+              {
+                "group": "Per iniziare",
+                "pages": [
+                  "introduction",
+                  "it/quickstart",
+                  "concepts",
+                  "authentication"
+                ]
+              },
+              {
+                "group": "Guide",
+                "pages": [
+                  "it/guides/compliance-mapping",
+                  "it/guides/hash-chain-verification",
+                  "guides/data-retention",
+                  "it/guides/gdpr-compliance"
+                ]
+              },
+              {
+                "group": "Riferimento",
+                "pages": [
+                  "reference/event-schema",
+                  "reference/error-codes",
+                  "reference/rate-limits"
+                ]
+              }
             ]
           },
           {
-            "group": "Ingestion",
-            "pages": [
-              "api-reference/post-events",
-              "api-reference/post-events-batch"
+            "tab": "Riferimento API",
+            "groups": [
+              {
+                "group": "Panoramica",
+                "pages": [
+                  "it/api-reference/overview",
+                  "api-reference/authentication",
+                  "api-reference/rate-limits"
+                ]
+              },
+              {
+                "group": "Ingestione",
+                "pages": [
+                  "api-reference/post-events",
+                  "api-reference/post-events-batch"
+                ]
+              },
+              {
+                "group": "Lettura e verifica",
+                "pages": [
+                  "api-reference/get-events",
+                  "api-reference/get-event",
+                  "api-reference/verify-chain",
+                  "api-reference/actions"
+                ]
+              },
+              {
+                "group": "Richieste dell'interessato",
+                "pages": [
+                  "api-reference/dsar-export",
+                  "api-reference/dsar-delete"
+                ]
+              }
             ]
           },
           {
-            "group": "Read & Verify",
-            "pages": [
-              "api-reference/get-events",
-              "api-reference/get-event",
-              "api-reference/verify-chain",
-              "api-reference/actions"
-            ]
-          },
-          {
-            "group": "Data Subject Requests",
-            "pages": [
-              "api-reference/dsar-export",
-              "api-reference/dsar-delete"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "SDKs",
-        "groups": [
-          {
-            "group": "SDKs",
-            "pages": [
-              "sdks/overview",
-              "sdks/node",
-              "sdks/python",
-              "sdks/go",
-              "sdks/php"
+            "tab": "SDK",
+            "groups": [
+              {
+                "group": "SDK",
+                "pages": [
+                  "it/sdks/overview",
+                  "sdks/node",
+                  "sdks/python",
+                  "sdks/go",
+                  "sdks/php"
+                ]
+              }
             ]
           }
         ]

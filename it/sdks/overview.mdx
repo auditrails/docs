@@ -1,0 +1,78 @@
+---
+title: "Panoramica SDK AuditRails — librerie client e pacchetti"
+sidebarTitle: "Panoramica"
+description: "SDK ufficiali AuditRails per Node.js, Python, Go e PHP. Batching automatico, retry con backoff esponenziale e arresto controllato integrati."
+---
+
+AuditRails fornisce librerie client proprietarie per ogni principale linguaggio backend. Ogni SDK condivide lo stesso design di base: un metodo `log()` fire-and-forget che non solleva mai eccezioni, batching automatico e flush in background, retry con backoff esponenziale sugli errori del server, e un percorso di arresto controllato che garantisce che nessun evento venga perso quando il processo termina.
+
+<Note>
+  Ogni SDK è un client leggero su un singolo endpoint REST. Se il tuo linguaggio non
+  è elencato, [`POST /v1/events`](/api-reference/post-events) è l'intera
+  interfaccia ed è pienamente supportato.
+</Note>
+
+## SDK disponibili
+
+<CardGroup cols={2}>
+  <Card title="Node.js / TypeScript" icon="node-js" href="/sdks/node">
+    Richiede Node 18+ per il `fetch` nativo. Zero dipendenze a runtime.
+  </Card>
+  <Card title="Python" icon="python" href="/sdks/python">
+    Il client sincrono usa `urllib` (zero dipendenze); quello asincrono aggiunge `httpx`.
+  </Card>
+  <Card title="Go" icon="golang" href="/sdks/go">
+    Usa solo il pacchetto standard `net/http`. Zero dipendenze.
+  </Card>
+  <Card title="PHP" icon="php" href="/sdks/php">
+    Compatibile PSR-18, funziona con Guzzle o qualsiasi client HTTP PSR-18.
+  </Card>
+</CardGroup>
+
+## Riferimenti pacchetti
+
+| Linguaggio | Pacchetto | Installazione | Repository |
+|---|---|---|---|
+| Node.js / TypeScript | `@auditrails/node` | `npm install @auditrails/node` | [auditrails-node](https://github.com/auditrails/auditrails-node) |
+| Python | `auditrails` | `pip install auditrails` | [auditrails-python](https://github.com/auditrails/auditrails-python) |
+| Go | `auditrails-go` | `go get github.com/auditrails/auditrails-go` | [auditrails-go](https://github.com/auditrails/auditrails-go) |
+| PHP | `auditrails/auditrails-php` | `composer require auditrails/auditrails-php` | [auditrails-php](https://github.com/auditrails/auditrails-php) |
+
+Se preferisci non aggiungere alcuna dipendenza, [`POST /v1/events`](/api-reference/post-events) è l'intera interfaccia ed è pienamente supportato.
+
+## Comportamento condiviso
+
+Tutti gli SDK implementano le stesse garanzie di affidabilità indipendentemente dal linguaggio.
+
+| Comportamento | Dettaglio |
+|---|---|
+| **`log()` senza eccezioni** | Il metodo bufferizzato `log()` non solleva mai eccezioni. Gli errori vengono gestiti internamente e, se è configurato un logger, inviati lì. |
+| **Batching automatico** | Gli eventi vengono bufferizzati in memoria e inviati in lotti fino a 100. Il buffer viene svuotato automaticamente ogni secondo. |
+| **Retry con backoff esponenziale** | Su ogni risposta `5xx` l'SDK riprova fino a 3 volte con ritardi di 200 ms → 400 ms → 800 ms prima di scartare il lotto. |
+| **Arresto controllato** | Ogni SDK registra un hook di uscita del processo (`beforeExit`/`SIGTERM` in Node, `atexit` in Python, `defer client.Close()` in Go, `register_shutdown_function` in PHP) per svuotare gli eventi bufferizzati rimanenti prima che il processo termini. |
+| **Dipendenze minime** | Node usa `fetch` nativo, Python usa `urllib`, Go usa `net/http`, e PHP richiede un client HTTP PSR-18 (es. Guzzle). |
+
+## Opzioni di configurazione
+
+Ogni SDK accetta lo stesso insieme di opzioni di configurazione, mappate secondo la convenzione di denominazione di ciascun linguaggio.
+
+| Opzione | Predefinito | Descrizione |
+|---|---|---|
+| `apiKey` | *(obbligatorio)* | La tua chiave API AuditRails. Ottienila dalla [dashboard](https://app.auditrails.io). |
+| `baseUrl` | `https://api.auditrails.io` | Sovrascrive l'endpoint dell'API (utile per proxy o installazioni private). |
+| `batchSize` | `100` | Numero massimo di eventi da includere in una singola richiesta HTTP. |
+| `flushInterval` | `1 secondo` | Ogni quanto viene svuotato il buffer interno verso l'API. |
+| `maxRetries` | `3` | Numero di tentativi di retry sugli errori `5xx` prima di scartare un lotto. |
+| `timeout` | `10 secondi` | Timeout HTTP per singola richiesta. |
+
+## Metodi disponibili
+
+Tutti gli SDK espongono gli stessi quattro metodi principali.
+
+| Metodo | Comportamento |
+|---|---|
+| `log(event)` | Aggiunge un evento al buffer in memoria. Ritorna immediatamente. **Non solleva mai eccezioni.** L'evento viene inviato in background come parte del prossimo flush del lotto. |
+| `logDirect(event)` | Invia immediatamente un singolo evento, bypassando il buffer. Restituisce la risposta dell'API (incluso il `logId`). **Solleva eccezioni in caso di errore.** |
+| `logBatchDirect(events)` | Invia immediatamente un array di eventi in un'unica richiesta, bypassando il buffer. **Solleva eccezioni in caso di errore.** |
+| `flush()` | Attiva manualmente lo svuotamento di tutti gli eventi attualmente bufferizzati. Utile prima di un arresto pianificato o alla fine del ciclo di vita di una richiesta. |
+| `close()` | Svuota tutti gli eventi bufferizzati e arresta i worker in background. Chiamalo durante la chiusura dell'applicazione. |

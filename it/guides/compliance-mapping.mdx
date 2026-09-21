@@ -1,0 +1,222 @@
+---
+title: "Mappatura dei framework di conformità: DORA, NIS2, GDPR e altro"
+sidebarTitle: "Mappatura conformità"
+description: "Mappa gli eventi e le funzionalità di AuditRails su tutti gli 8 framework di conformità supportati: DORA, GDPR, NIS2, l'EU AI Act, ISO 27001, SOC 2, il provvedimento del Garante sugli amministratori di sistema e PCI DSS v4.0."
+---
+
+AuditRails supporta 8 framework di conformità pronti all'uso. Per ciascuno, tipi di evento specifici, garanzie di archiviazione e funzionalità della dashboard sono mappati direttamente sui controlli normativi, così puoi dimostrare la conformità senza raccolta manuale delle evidenze.
+
+L'elenco autorevole è sempre `GET https://app.auditrails.io/api/v1/frameworks`. Se un framework non è presente in quella risposta, non è disponibile per l'attivazione.
+
+## Per iniziare
+
+Prima di mappare gli eventi sui controlli, assicurati di essere configurato correttamente.
+
+<Steps>
+  <Step title="Abilita un framework di conformità">
+    Vai su **Impostazioni → Framework di conformità** e attiva i framework rilevanti per la tua organizzazione. Ogni piano include la registrazione dei framework di conformità. Quanti puoi abilitare contemporaneamente dipende dal tuo piano: Starter Trails ne ottiene uno, scelto in fase di registrazione e bloccato; Framework Trails ne ottiene fino a tre, sostituibili in autonomia; Compliance Trails li ottiene tutti, inclusi gratuitamente.
+  </Step>
+  <Step title="Rivedi la checklist di conformità">
+    Apri **Dashboard → Conformità** e seleziona il tuo framework. Ogni voce della checklist è mappata su un controllo specifico e ne mostra lo stato attuale.
+  </Step>
+  <Step title="Inizia a registrare gli eventi richiesti">
+    Strumenta la tua applicazione per emettere i tipi di evento elencati per il tuo framework nelle sezioni seguenti. Usa l'SDK AuditRails o l'API REST.
+  </Step>
+  <Step title="Esegui la verifica automatica">
+    Usa la funzione di verifica automatica nella dashboard di conformità per confermare che la tua catena di hash sia integra e che la copertura degli eventi richiesti sia soddisfatta.
+  </Step>
+  <Step title="Monitora i progressi">
+    Monitora la checklist nel tempo. Ogni controllo diventa verde non appena AuditRails rileva gli eventi e la configurazione richiesti.
+  </Step>
+</Steps>
+
+---
+
+## Riferimento framework
+
+<Tabs>
+  <Tab title="DORA">
+    Il Regolamento UE sulla Resilienza Operativa Digitale (2022/2554) si applica alle entità finanziarie e ai loro fornitori ICT. Enfatizza la continuità operativa, le tempistiche degli incidenti e il rischio da terze parti.
+
+    | Articolo | Requisito | Funzionalità AuditRails |
+    |---------|-------------|-------------------|
+    | Art.5-9 - Rischio ICT | Registro di audit delle operazioni | Registro immutabile |
+    | Art.6 - Governance ICT | Registrazione con catena di hash | Verifica della catena di hash |
+    | Art.17-19 - Gestione incidenti | Cronologie degli incidenti | Eventi di incidente con timestamp |
+    | Art.24-27 - Test di resilienza | Eventi `vulnerability.scan` | Cattura degli eventi |
+    | Art.28-30 - Rischio terze parti | `access.granted` con `metadata.is_third_party` | Cattura degli eventi |
+
+    **Scadenze di segnalazione:** 4 ore (notifica iniziale), 72 ore (relazione intermedia), 1 mese (relazione finale). Registra gli eventi `incident.detected` e `incident.notified` per creare una traccia con timestamp per ciascuna scadenza.
+
+    **Conservazione:** 5 anni (impostata automaticamente quando DORA è abilitato).
+
+    <Info>
+      Il requisito dell'Art.6 di DORA per la registrazione con catena di hash è soddisfatto nativamente. Ogni evento è concatenato con SHA-256, e puoi verificare la catena in qualsiasi momento tramite dashboard o API.
+    </Info>
+  </Tab>
+
+  <Tab title="GDPR">
+    Gli obblighi GDPR spaziano dalla responsabilizzazione nel trattamento dei dati, alla gestione del consenso, ai diritti dell'interessato, alla notifica delle violazioni. Consulta la [guida alla conformità GDPR](/it/guides/gdpr-compliance) per i passaggi di configurazione completi.
+
+    | Articolo | Requisito | Funzionalità AuditRails |
+    |---------|-------------|-------------------|
+    | Art.5 - Responsabilizzazione | Registro di audit del trattamento | Registro di audit immutabile |
+    | Art.6 - Base giuridica | `consent.given`, `consent.withdrawn` | Cattura degli eventi |
+    | Art.15-20 - Diritti dell'interessato | Esportazione/eliminazione DSAR | API DSAR + Dashboard |
+    | Art.30 - Registri | Registri di trattamento generati automaticamente | Dashboard di conformità |
+    | Art.33 - Notifica delle violazioni | `breach.detected`, `breach.notified` | Cattura degli eventi |
+    | Art.35 - DPIA | Checklist DPIA | Checklist di conformità |
+
+    **Conservazione:** 5 anni (impostata automaticamente quando GDPR è abilitato).
+
+    <Tip>
+      `consent.given` richiede `actor_id`, `metadata.legal_basis` e `metadata.purpose`. Gli eventi privi di un campo richiesto vengono rifiutati in fase di ingestione, quindi una checklist superata significa che l'evidenza è realmente completa.
+    </Tip>
+  </Tab>
+
+  <Tab title="NIS2">
+    La Direttiva UE NIS2 (2022/2555) si applica alle entità essenziali e importanti. Impone la registrazione degli eventi di sicurezza, i controlli di accesso, il monitoraggio della supply chain e la segnalazione degli incidenti.
+
+    | Articolo | Requisito | Funzionalità AuditRails |
+    |---------|-------------|-------------------|
+    | Art.21 - Misure di sicurezza | Eventi di sicurezza, controlli di accesso, modifiche di configurazione | Cattura degli eventi |
+    | Art.21(2)(d) - Supply chain | Registrazione dell'accesso di terze parti | Cattura degli eventi |
+    | Art.21(2)(h) - Crittografia | SHA-256 + WORM + TLS 1.3 + SSE | Catena di hash + S3 |
+    | Art.21(2)(i) - Controlli di autenticazione | Eventi di autenticazione | Eventi `auth.*` |
+    | Art.23 - Segnalazione incidenti | `incident.early_warning`, `incident.notified`, `incident.resolved` con timestamp | Registro immutabile |
+    | Art.20 - Governance | Dashboard di supervisione della direzione | Dashboard di conformità |
+
+    **Scadenze di segnalazione:** 24 ore (allarme preventivo), 72 ore (notifica dell'incidente), 1 mese (relazione finale). `incident.early_warning` richiede `actor_id`, `metadata.incident_id` e `metadata.authority`.
+
+    **Conservazione:** 5 anni (impostata automaticamente quando NIS2 è abilitato).
+  </Tab>
+
+  <Tab title="EU AI Act">
+    Il Regolamento (UE) 2024/1689 si applica ai fornitori e utilizzatori di sistemi di IA. L'articolo 12 richiede che i sistemi ad alto rischio registrino automaticamente gli eventi lungo il loro ciclo di vita, esattamente ciò che offre un registro append-only con catena di hash.
+
+    | Articolo | Requisito | Tipi di evento |
+    |---------|-------------|-------------|
+    | Art.9 - Gestione del rischio | Revisione continua e documentata del rischio | `aiact.risk_management_review` |
+    | Art.10 - Governance dei dati | Provenienza dei dati di addestramento | `aiact.training_data_lineage_recorded` |
+    | Art.12 - Registrazione automatica | Log operativi per ogni inferenza | `aiact.model_inference_logged` |
+    | Art.14 - Supervisione umana | Intervento umano registrato | `aiact.human_oversight_intervention` |
+    | Art.43 - Valutazione di conformità | Registri di valutazione | `aiact.conformity_assessment_record` |
+    | Art.50 - Trasparenza | Informativa mostrata all'utente | `aiact.transparency_disclosure_shown` |
+    | Art.72 - Monitoraggio post-commercializzazione | Eventi di monitoraggio continuo | `aiact.post_market_monitoring_event` |
+    | Art.73 - Incidenti gravi | Segnalazioni di incidenti alle autorità | `aiact.serious_incident_logged` |
+
+    **Conservazione:** 10 anni, la più lunga tra tutti i framework supportati da AuditRails (impostata automaticamente quando l'EU AI Act è abilitato).
+
+    <Info>
+      `aiact.model_inference_logged` richiede `actor_id`, `resource`, `metadata.system_id` e `metadata.model_id`. I campi opzionali coprono `input_hash`, `output_hash`, `risk_tier`, `decision` e `human_oversight`, che è ciò che trasforma un log di inferenza grezzo in un'evidenza ai sensi dell'Art.12.
+    </Info>
+  </Tab>
+
+  <Tab title="ISO 27001">
+    I controlli dell'Annex A di ISO 27001:2022 si mappano strettamente sulle capacità di registrazione, monitoraggio e integrità di AuditRails.
+
+    | Controllo | Requisito | Funzionalità AuditRails |
+    |---------|-------------|-------------------|
+    | A.8.15 - Registrazione | Registrazione completa degli eventi | Cattura degli eventi configurabile |
+    | A.8.16 - Monitoraggio | Monitoraggio continuo | Monitoraggio da dashboard |
+    | A.8.17 - Sincronizzazione oraria | Timestamp UTC | Timestamp UTC in millisecondi |
+    | A.5.23 - Sicurezza cloud | Protezione dei dati | WORM + crittografia + isolamento per tenant |
+    | A.5.25 - Revisione delle informazioni | Verifica automatica | Verifica automatica da dashboard di conformità |
+    | A.5.26 - Risposta agli incidenti | Eventi di incidente | `incident.detected`, `incident.resolved` |
+
+    **Conservazione:** 3 anni (impostata automaticamente quando ISO 27001 è abilitato).
+
+    <Info>
+      L'isolamento per tenant significa che la catena di hash di ogni cliente è indipendente. Una violazione nella catena di un tenant non può influenzare quella di un altro, soddisfacendo i controlli multi-tenant dell'A.5.23.
+    </Info>
+  </Tab>
+
+  <Tab title="SOC 2">
+    I Trust Services Criteria di SOC 2 richiedono di registrare eventi di accesso, attività di autenticazione, modifiche dei permessi e modifiche di configurazione, e di dimostrare che tali log non possano essere manomessi.
+
+    | Controllo | Tipi di evento | Funzionalità AuditRails |
+    |---------|-------------|-------------------|
+    | CC6.1 - Accesso logico | `access.granted`, `access.revoked` | Registro di audit immutabile |
+    | CC6.2 - Autenticazione | `auth.login`, `auth.logout` | Registro di audit immutabile |
+    | CC6.3 - Modifiche dei permessi | `permission.granted`, `permission.revoked` | Ruolo RBAC di revisore |
+    | CC7.2 - Monitoraggio | Ricerca da dashboard ed export CSV | Dashboard + export |
+    | CC8.1 - Gestione delle modifiche | `config.changed`, `deploy.completed` | Registro di audit immutabile |
+    | A1.2 - Disponibilità | Archiviazione WORM | S3 Object Lock COMPLIANCE |
+
+    **Capacità chiave:** registro di audit immutabile, archiviazione WORM, ruolo RBAC di revisore (accesso in sola lettura per i revisori), export CSV per pacchetti di evidenze.
+
+    **Conservazione:** 1 anno (impostata automaticamente quando SOC 2 è abilitato).
+
+    <Info>
+      Il ruolo RBAC di revisore ti consente di concedere al tuo revisore esterno un accesso in sola lettura alla dashboard di conformità senza esporre le impostazioni di configurazione sensibili.
+    </Info>
+  </Tab>
+
+  <Tab title="Amministratori di Sistema">
+    Il provvedimento del Garante italiano del 27 novembre 2008 (aggiornato nel 2009) sugli *amministratori di sistema* richiede che ogni accesso amministrativo ai sistemi che trattano dati personali sia individualmente attribuibile, completamente registrato, a prova di manomissione e conservato per almeno sei mesi.
+
+    | Controllo | Requisito | Tipi di evento |
+    |---------|-------------|-------------|
+    | AMS-LOG-1 - Eventi di accesso | Ogni accesso amministratore, con timestamp e identità | `admin.login` |
+    | AMS-LOG-2 - Eventi di disconnessione | Ogni disconnessione, con timestamp | `admin.logout` |
+    | AMS-LOG-3 - Tentativi falliti | Accessi amministratore falliti | `admin.login_failed` |
+    | AMS-LOG-4 - Operazioni privilegiate | Accesso ai dati, modifiche di configurazione, gestione utenti, escalation dei privilegi | `admin.operation`, `admin.data_access`, `admin.config_changed`, `admin.user_managed`, `admin.privilege_escalation` |
+    | AMS-ID-1/2 - Designazione | Nomina formale e revoca degli amministratori | `admin.designated`, `admin.revoked` |
+    | AMS-AUD-1/2 - Verifica annuale | Verifica e revisione annuale dell'elenco degli amministratori | `admin.verification_completed`, `admin.list_reviewed` |
+    | AMS-INT-1/2 - Integrità dei log | Archiviazione immutabile e verificabile | WORM + verifica della catena di hash |
+
+    **Conservazione:** 1 anno, superiore al minimo di sei mesi previsto dal provvedimento (impostata automaticamente quando il framework è abilitato).
+
+    <Info>
+      `admin.operation` richiede `actor_id`, `resource`, `metadata.operation_type`, `metadata.before` e `metadata.after`. La coppia before/after è ciò che rende il record probante e non una semplice nota che qualcosa è cambiato.
+    </Info>
+  </Tab>
+
+  <Tab title="PCI DSS v4.0">
+    Il Requisito 10 di PCI DSS v4.0 impone log di audit dettagliati per ogni accesso agli ambienti dei dati dei titolari di carta, con protezione da manomissione e ricerca per intervallo temporale.
+
+    | Requisito | Tipi di evento / Funzionalità | Mappatura AuditRails |
+    |-------------|----------------------|-------------------|
+    | 10.2.1 - Accesso ai log | `auth.login`, `auth.logout`, `cardholder.accessed` | Registro immutabile |
+    | 10.2.2 - Azioni amministrative | Tutti gli eventi admin con `actor_id` | Campo actor_id |
+    | 10.3 - Contenuto dei log | chi/cosa/quando/dove/esito | Schema evento standard |
+    | 10.5 - Protezione dei log | WORM impedisce la modifica | S3 Object Lock |
+    | 10.6 - Sincronizzazione oraria | Ricerca per intervallo temporale | Ricerca da dashboard |
+    | 10.7 - Conservazione | Minimo 12 mesi | Conservazione basata sul piano |
+
+    **Conservazione:** 1 anno (impostata automaticamente quando PCI DSS è abilitato). Questo soddisfa il minimo di 12 mesi del Requisito 10.7, con 3 mesi immediatamente disponibili.
+
+    <Tip>
+      Ogni evento in AuditRails include per impostazione predefinita i campi `actor_id`, `resource`, `action`, `timestamp`, indirizzo IP ed esito, soddisfacendo il mandato del "record completo" del Requisito 10.3 senza configurazione aggiuntiva.
+    </Tip>
+  </Tab>
+</Tabs>
+
+---
+
+## Conservazione in sintesi
+
+Abilitare un framework innalza la tua conservazione effettiva al suo minimo. Dove più framework sono abilitati, vince il più lungo.
+
+| Framework | Conservazione |
+|---|---|
+| EU AI Act | 10 anni |
+| DORA | 5 anni |
+| GDPR | 5 anni |
+| NIS2 | 5 anni |
+| ISO 27001 | 3 anni |
+| SOC 2 | 1 anno |
+| Amministratori di Sistema | 1 anno |
+| PCI DSS | 1 anno |
+
+La conservazione non è di per sé una funzionalità legata al piano. Consulta [Conservazione dei dati](/guides/data-retention) per capire come interagiscono il periodo base e i minimi dei framework.
+
+---
+
+## Copertura multi-framework
+
+Se la tua organizzazione deve soddisfare più framework contemporaneamente, AuditRails ne unisce i requisiti. Un singolo evento `auth.login`, ad esempio, soddisfa contemporaneamente SOC 2 CC6.2, PCI DSS 10.2.1 e NIS2 Art.21(2)(i).
+
+<Tip>
+  Abilita tutti i framework applicabili prima di iniziare la registrazione. Questo garantisce che la dashboard di conformità monitori la copertura su tutti fin dal primo giorno e che venga applicato il periodo di conservazione corretto (il più lungo tra tutti i framework abilitati).
+</Tip>
