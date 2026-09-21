@@ -1,0 +1,101 @@
+---
+title: "Panoramica API AuditRails: endpoint e convenzioni"
+sidebarTitle: "Panoramica"
+description: "Un riferimento completo per l'API REST di AuditRails — ingerisci eventi, interroga i log di audit, verifica l'integrità della catena e esplora il catalogo delle azioni di conformità."
+---
+
+L'API di AuditRails è un'interfaccia REST che consente di ingerire eventi di audit a prova di manomissione, recuperare e filtrare la cronologia dei log, verificare l'integrità crittografica della catena e sfogliare il catalogo delle azioni di conformità. Tutte le richieste vengono effettuate via HTTPS all'URL di base `https://api.auditrails.io`, e ogni endpoint è versionato sotto `/v1/`. I corpi di richiesta e risposta usano `application/json`.
+
+<Info>
+  I flussi DSAR (Data Subject Access Request, richiesta dell'interessato) sono disponibili esclusivamente tramite la dashboard di AuditRails e non sono esposti tramite l'API con token bearer.
+</Info>
+
+## URL di base
+
+```
+https://api.auditrails.io/v1
+```
+
+## Convenzioni di richiesta e risposta
+
+Ogni richiesta deve includere l'header `Content-Type: application/json` insieme al tuo header `Authorization`. Ogni risposta — inclusi gli errori — contiene un header `X-Request-Id` nel formato `req_<ULID>`. Conserva questo valore quando contatti il supporto; identifica in modo univoco l'esatta transazione lato server.
+
+### Formato degli errori
+
+Quando una richiesta fallisce, AuditRails restituisce un corpo di errore strutturato così da sapere sempre cosa è andato storto e dove approfondire.
+
+```json
+{
+  "error": {
+    "code": "validation/missing_action",
+    "message": "The 'action' field is required.",
+    "request_id": "req_01HX7YGBFZ3QK8N9VMJT5RPCE4",
+    "doc_url": "https://docs.auditrails.io/reference/error-codes"
+  }
+}
+```
+
+| Campo | Tipo | Descrizione |
+|---|---|---|
+| `code` | string | Codice di errore leggibile da macchina in formato `categoria/slug`. |
+| `message` | string | Spiegazione dell'errore leggibile da un umano. |
+| `request_id` | string | Lo stesso ID presente nell'header di risposta `X-Request-Id`. |
+| `doc_url` | string | Link diretto alla pagina di documentazione del codice di errore. |
+
+---
+
+## Catalogo degli endpoint
+
+La tabella seguente elenca ogni endpoint disponibile raggruppato per categoria funzionale. Clicca sul nome di un endpoint per saltare alla relativa pagina di riferimento.
+
+### Ingestione
+
+| Metodo | Percorso | Descrizione |
+|---|---|---|
+| `POST` | [`/v1/events`](/api-reference/post-events) | Ingerisce un singolo evento di audit nel tuo log. |
+| `POST` | [`/v1/events/batch`](/api-reference/post-events-batch) | Ingerisce un lotto fino a 100 eventi di audit in un'unica richiesta. |
+
+### Lettura e interrogazione
+
+| Metodo | Percorso | Descrizione |
+|---|---|---|
+| `GET` | [`/v1/events`](/api-reference/get-events) | Elenca gli eventi di audit con filtri opzionali (attore, azione, intervallo di date e altro). |
+| `GET` | [`/v1/events/{log_id}`](/api-reference/get-event) | Recupera un singolo evento di audit tramite il suo log ID univoco. |
+| `GET` | [`/v1/events/verify`](/api-reference/verify-chain) | Verifica l'integrità crittografica della tua catena di audit. |
+
+### Conformità
+
+| Metodo | Percorso | Descrizione |
+|---|---|---|
+| `GET` | [`/v1/actions`](/api-reference/actions) | Recupera il catalogo completo delle azioni di conformità (slug di azione standardizzati). |
+
+---
+
+## Esempio rapido
+
+Lo snippet seguente ingerisce il tuo primo evento con un unico comando `curl`. Sostituisci `at_live_xxx` con la tua chiave API di produzione.
+
+```bash
+curl -X POST https://api.auditrails.io/v1/events \
+  -H "Authorization: Bearer at_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "user.login",
+    "actor_id": "user_123"
+  }'
+```
+
+<CardGroup cols={2}>
+  <Card title="Autenticazione" icon="key" href="/api-reference/authentication">
+    Scopri come funzionano le chiavi API, la differenza tra chiavi live e di test, e come gestire gli errori di autenticazione.
+  </Card>
+  <Card title="Limiti di frequenza" icon="gauge-high" href="/api-reference/rate-limits">
+    Comprendi i limiti per IP, per piano e per chiave di test, e come gestire con eleganza le risposte 429.
+  </Card>
+  <Card title="Codici di errore" icon="circle-exclamation" href="/reference/error-codes">
+    Sfoglia l'elenco completo dei codici di errore leggibili da macchina restituiti dall'API.
+  </Card>
+  <Card title="SDK" icon="code" href="/sdks/overview">
+    Usa un SDK ufficiale AuditRails per ottenere retry automatici, risposte tipizzate e altro.
+  </Card>
+</CardGroup>

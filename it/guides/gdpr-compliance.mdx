@@ -1,0 +1,236 @@
+---
+title: "Guida alla conformità GDPR: DPA, richieste dell'interessato, residenza dei dati e PII"
+sidebarTitle: "GDPR"
+description: "Configura AuditRails come responsabile del trattamento conforme al GDPR: firma il tuo DPA, gestisci le richieste dell'interessato, anonimizza gli IP, applica regole di redazione e configura la residenza dei dati."
+---
+
+Ai sensi del GDPR, AuditRails agisce come tuo **responsabile del trattamento** — tratta i dati personali per tuo conto secondo le tue istruzioni. Tu rimani il **titolare del trattamento**, responsabile di determinare finalità e mezzi del trattamento. Questa guida ti accompagna nella firma del tuo Accordo sul Trattamento dei Dati (DPA), nella gestione delle richieste dell'interessato, nella minimizzazione dei dati personali nei tuoi log e nella configurazione della residenza dei dati.
+
+## Accordo sul Trattamento dei Dati (DPA)
+
+Prima di trattare qualsiasi dato personale tramite AuditRails, devi avere un DPA firmato in essere. Il DPA è disponibile direttamente nella tua dashboard — senza andirivieni con un team commerciale.
+
+<Steps>
+  <Step title="Vai alle impostazioni Legali">
+    Vai su **Dashboard → Impostazioni → Legale**.
+  </Step>
+  <Step title="Leggi il DPA">
+    Leggi l'accordo. Il DPA copre la natura e la finalità del trattamento, le categorie di dati personali e di interessati, l'elenco dei sub-responsabili, le Clausole Contrattuali Standard UE (SCC), e gli obblighi di notifica delle violazioni.
+  </Step>
+  <Step title="Firma e scarica">
+    Clicca **Firma DPA** per apporre la tua firma elettronica. Scarica il PDF firmato e conservalo con i tuoi documenti di conformità.
+  </Step>
+</Steps>
+
+Il DPA si rinnova automaticamente. Riceverai un **preavviso di 30 giorni** prima di qualsiasi modifica sostanziale, dandoti il tempo di esaminarla e opporti prima che il rinnovo abbia effetto.
+
+### Sub-responsabili
+
+AuditRails utilizza i seguenti sub-responsabili:
+
+| Sub-responsabile | Servizio | Regione |
+|---------------|---------|--------|
+| AWS (S3, SQS) | Archiviazione e code di messaggi | USA e UE |
+| Stripe | Elaborazione dei pagamenti | USA |
+| MaxMind | Arricchimento Geo-IP | USA |
+
+Riceverai un **preavviso di 30 giorni** prima dell'aggiunta di qualsiasi nuovo sub-responsabile. Se ti opponi a un nuovo sub-responsabile, contatta il supporto prima della scadenza del periodo di preavviso.
+
+---
+
+## Checklist di conformità
+
+La checklist di conformità GDPR ti offre una vista in tempo reale del tuo stato rispetto ai principali obblighi GDPR. Aprila da **Dashboard → Conformità → GDPR**.
+
+La checklist monitora:
+
+| Categoria | Elementi monitorati |
+|----------|--------------|
+| Principi di protezione dei dati | Responsabilizzazione Art.5, limitazione della finalità, minimizzazione dei dati |
+| Base giuridica | Registrazione del consenso, documentazione del legittimo interesse |
+| Procedure per richieste dell'interessato | Configurazione dei flussi di esportazione ed eliminazione |
+| Nomina del DPO | Designazione del Responsabile della Protezione dei Dati (se richiesta) |
+| DPIA | Completamento della Valutazione d'Impatto sulla Protezione dei Dati |
+| Notifica delle violazioni | Tipi di eventi di violazione configurati, notifica entro 48 ore |
+| Trasferimenti internazionali | SCC nel DPA, regioni dei sub-responsabili |
+| Misure di sicurezza | Catena di hash, WORM, crittografia, controlli di accesso |
+
+---
+
+## Richieste dell'interessato (DSAR)
+
+Gli articoli 15-20 del GDPR conferiscono agli individui il diritto di accedere, esportare ed eliminare i propri dati personali. AuditRails fornisce un flusso DSAR integrato. Solo gli **utenti amministratori** possono inviare richieste DSAR.
+
+### Esportazione DSAR (Art.15 / Art.20)
+
+<Steps>
+  <Step title="Apri il pannello DSAR">
+    Vai su **Dashboard → Impostazioni → Richieste dell'interessato** e clicca **Nuova richiesta**.
+  </Step>
+  <Step title="Inserisci l'ID dell'attore">
+    Inserisci l'`actor_id` corrispondente all'interessato. È l'identificativo che usi quando registri gli eventi (ad esempio, `user_123`).
+  </Step>
+  <Step title="Seleziona il tipo Esportazione">
+    Scegli **Esportazione** come tipo di richiesta.
+  </Step>
+  <Step title="Scarica l'esportazione">
+    AuditRails compila tutti gli eventi associati a quell'`actor_id` in un file ZIP contenente un CSV. Scaricalo e forniscilo all'interessato.
+  </Step>
+</Steps>
+
+### Eliminazione DSAR (Art.17)
+
+<Steps>
+  <Step title="Apri il pannello DSAR">
+    Vai su **Dashboard → Impostazioni → Richieste dell'interessato** e clicca **Nuova richiesta**.
+  </Step>
+  <Step title="Inserisci l'ID dell'attore">
+    Inserisci l'`actor_id` dell'interessato che richiede la cancellazione.
+  </Step>
+  <Step title="Seleziona il tipo Elimina">
+    Scegli **Elimina** come tipo di richiesta e conferma.
+  </Step>
+</Steps>
+
+<Warning>
+  **I record in archiviazione calda vengono eliminati immediatamente.** I record in S3 WORM (archiviazione fredda) **non possono essere fisicamente eliminati** prima della scadenza del periodo di conservazione — sono oggetti S3 Object Lock in modalità COMPLIANCE, immutabili per progettazione. I record in archiviazione WORM vengono **contrassegnati logicamente come eliminati** ed esclusi da tutte le letture, risposte API ed esportazioni immediatamente al momento dell'elaborazione della richiesta. L'eliminazione fisica avviene automaticamente alla scadenza dell'Object Lock.
+
+  Questo comportamento è consentito ai sensi dell'**Art.17(3)(e) del GDPR**, che permette la conservazione dei dati necessari per l'accertamento, l'esercizio o la difesa di un diritto in sede giudiziaria. Il tuo DPA documenta questa base giuridica.
+</Warning>
+
+**Evidenza delle scadenze:** l'Art.12(3) del GDPR richiede una risposta senza ingiustificato ritardo e comunque entro un mese. Il flusso DSAR registra un evento `data.deleted` con un timestamp così puoi dimostrare quando la richiesta è stata evasa.
+
+---
+
+## Best practice per i dati personali (PII)
+
+Minimizzare i dati personali nei tuoi log di audit è il modo più efficace per ridurre il rischio GDPR. Meno PII registri, meno ne devi gestire.
+
+### Usa identificativi, non PII
+
+<CodeGroup>
+  ```javascript Corretto — registra un identificativo
+  auditRails.log({
+    action: 'document.viewed',
+    actorId: 'user_123',        // ID interno, non PII
+    resource: 'document/456',
+  });
+  ```
+
+  ```javascript Sbagliato — registra PII direttamente
+  auditRails.log({
+    action: 'document.viewed',
+    actorId: 'john@example.com',  // ❌ l'indirizzo email è PII
+    resource: 'document/456',
+  });
+  ```
+</CodeGroup>
+
+### Registra i nomi dei campi, non i valori
+
+Quando registri cosa è cambiato, registra i nomi dei campi modificati — non i loro nuovi valori.
+
+<CodeGroup>
+  ```javascript Corretto — solo nomi dei campi
+  auditRails.log({
+    action: 'profile.updated',
+    actorId: 'user_123',
+    metadata: {
+      fields_changed: ['name', 'email'],  // ✅ solo nomi
+    },
+  });
+  ```
+
+  ```javascript Sbagliato — registra valori PII
+  auditRails.log({
+    action: 'profile.updated',
+    actorId: 'user_123',
+    metadata: {
+      new_email: 'john@example.com',  // ❌ valore PII
+      new_name: 'John Smith',         // ❌ valore PII
+    },
+  });
+  ```
+</CodeGroup>
+
+### Non registrare mai dati sensibili
+
+Evita di registrare quanto segue nei metadati degli eventi:
+
+- Password o hash di password
+- Codici fiscali o numeri di identificazione nazionale
+- Numeri completi di carte di pagamento (PAN)
+- Dati biometrici
+- Informazioni sanitarie o mediche
+- Chiavi API o segreti non mascherati
+
+### Anonimizzazione IP
+
+Se tratti indirizzi IP di utenti UE, valuta di abilitare l'anonimizzazione IP per troncare l'ultimo ottetto prima dell'archiviazione.
+
+<Steps>
+  <Step title="Vai alle impostazioni Privacy">
+    Vai su **Dashboard → Impostazioni → Privacy**.
+  </Step>
+  <Step title="Abilita l'anonimizzazione IP">
+    Attiva **Anonimizzazione IP**. AuditRails troncherà l'ultimo ottetto di ogni indirizzo IP da quel momento in avanti.
+
+    **Esempio:** `203.0.113.45` → `203.0.113.0`
+  </Step>
+</Steps>
+
+<Info>
+  L'anonimizzazione IP si applica **solo agli eventi futuri**. Gli eventi già archiviati mantengono i loro indirizzi IP originali. Se devi anonimizzare dati storici, contatta il supporto.
+</Info>
+
+### Regole di redazione dei metadati
+
+Le regole di redazione rimuovono automaticamente i nomi di campo PII noti dai metadati degli eventi prima dell'archiviazione, sostituendone i valori con `[REDACTED]`.
+
+<Steps>
+  <Step title="Vai a Regole di redazione">
+    Vai su **Dashboard → Impostazioni → Privacy → Regole di redazione**.
+  </Step>
+  <Step title="Configura i nomi dei campi da redigere">
+    AuditRails precompila i nomi di campo PII comuni: `email`, `phone`, `ssn`. Aggiungi qualsiasi altro nome di campo che potrebbe comparire nei tuoi metadati.
+  </Step>
+  <Step title="Verifica la redazione">
+    Registra un evento di test contenente un nome di campo redatto e conferma che il valore appaia come `[REDACTED]` nella dashboard.
+  </Step>
+</Steps>
+
+<Tip>
+  Le regole di redazione sono una rete di sicurezza — non un sostituto di una buona strumentazione. Progetta il tuo logging per evitare PII fin dall'inizio; usa le regole di redazione per intercettare ciò che sfugge.
+</Tip>
+
+---
+
+## Residenza dei dati
+
+Tutti i piani attualmente archiviano i dati in un'unica regione AWS — `us-east-1` (Virginia settentrionale, USA). Non è attualmente disponibile alcuna opzione di archiviazione esclusivamente UE, indipendentemente dal piano.
+
+<Info>
+  Se i tuoi obblighi GDPR richiedono che i dati personali non lascino l'UE, parlacene prima di registrarti — consulta il DPA (disponibile su **Dashboard → Impostazioni → Legale**) per capire come AuditRails tutela questo trasferimento transfrontaliero, e contatta il supporto se devi discutere le tue specifiche esigenze di residenza dei dati.
+</Info>
+
+---
+
+## Notifica delle violazioni
+
+Se AuditRails viene a conoscenza di un incidente di sicurezza che riguarda i tuoi dati, ti notificheremo **entro 48 ore** dal momento in cui ne veniamo a conoscenza. Questo supporta il tuo obbligo di notifica entro 72 ore alla tua autorità di controllo ai sensi dell'Art.33 del GDPR.
+
+Per registrare eventi relativi a violazioni dalla tua applicazione:
+
+```javascript
+auditRails.log({
+  action: 'breach.detected',
+  actorId: 'system',
+  resource: 'security/incident-2024-001',
+  metadata: {
+    affected_systems: ['auth-service'],
+    detected_at: new Date().toISOString(),
+  },
+});
+```
+
+Registra `breach.notified` quando notifichi la tua autorità di controllo, e `breach.resolved` quando l'incidente viene chiuso. Questi eventi sono monitorati dalla checklist di conformità GDPR e soddisfano i requisiti di documentazione dell'Art.33.

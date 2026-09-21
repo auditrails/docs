@@ -1,0 +1,194 @@
+---
+title: "Verifica della catena di hash: integrità a prova di manomissione dei log di audit"
+sidebarTitle: "Catena di hash"
+description: "Comprendi come la catena di hash SHA-256 di AuditRails rende i log di audit a prova di manomissione, e come verificare l'integrità della catena tramite dashboard o API."
+---
+
+Ogni evento scritto in AuditRails è collegato crittograficamente a quello precedente. Se qualcuno elimina, modifica o inserisce un evento — anche a livello di infrastruttura — la catena si interrompe in quel punto e la verifica fallisce. Questa pagina spiega come è costruita la catena, come verificarla dalla dashboard o dall'API, e cosa fare se viene rilevata un'interruzione.
+
+## Come funziona la catena di hash
+
+L'hash di ogni nuovo evento viene calcolato a partire da tre input: l'hash dell'evento precedente, il payload canonico dell'evento corrente e il timestamp corrente in millisecondi.
+
+```
+hash = SHA-256(previous_hash + canonical_payload + timestamp_ms)
+```
+
+### Payload canonico
+
+Il payload canonico è una serializzazione JSON deterministica dei campi principali dell'evento:
+
+```json
+{
+  "log_id": "evt_01hx...",
+  "tenant_id": "ten_01gy...",
+  "action": "access.granted",
+  "actor_id": "user_123",
+  "resource": "document/456",
+  "metadata": { "role": "editor" }
+}
+```
+
+<Info>
+  I campi arricchiti dal worker — `country`, `city`, `ip_address`, e i campi della catena stessa (`chain_seq`, `hash`, `prev_hash`) — sono deliberatamente esclusi dal payload canonico. Questo garantisce che l'hash rimanga stabile indipendentemente da come AuditRails arricchisce l'evento dopo l'ingestione.
+</Info>
+
+### Evento genesi
+
+Il primissimo evento nella catena di un tenant usa 64 caratteri zero (`0000...0000`) come `previous_hash`. L'hash di ogni evento successivo dipende da tutti gli eventi precedenti, formando una catena ininterrotta a partire dal primo record mai scritto.
+
+### Isolamento per tenant
+
+Ogni tenant mantiene una catena completamente indipendente. Non esiste alcuna dipendenza tra tenant, quindi un'esecuzione di verifica per la tua organizzazione controlla solo i tuoi eventi.
+
+---
+
+## Perché il rilevamento delle manomissioni funziona
+
+La sicurezza della catena deriva dalla natura unidirezionale di SHA-256:
+
+| Vettore di attacco | Cosa succede |
+|---------------|--------------|
+| **Eliminare un evento** | Il `previous_hash` dell'evento successivo non corrisponde più — la catena si interrompe al numero di sequenza eliminato. |
+| **Modificare un evento** | L'evento modificato produce un hash diverso — la catena si interrompe a quel numero di sequenza. |
+| **Inserire un evento** | I numeri di sequenza si spostano — tutti gli hash successivi diventano non validi. |
+| **Replay / backfill** | Il timestamp è fissato nell'hash — riprodurre con un orario diverso produce un hash diverso. |
+
+Una catena valida è la prova crittografica che ogni evento esiste esattamente come è stato scritto, nell'ordine corretto, senza lacune.
+
+---
+
+## Verifica tramite la dashboard
+
+Puoi ispezionare i singoli eventi e navigare la catena direttamente dall'interfaccia.
+
+<Steps>
+  <Step title="Apri la vista Log">
+    Vai su **Dashboard → Log** e individua l'evento che vuoi ispezionare.
+  </Step>
+  <Step title="Clicca sull'evento">
+    Si apre il pannello di dettaglio dell'evento. Scorri fino alla sezione **Catena**.
+  </Step>
+  <Step title="Naviga la catena">
+    Il pannello mostra l'`hash` e il `chain_seq` dell'evento corrente, insieme ai link agli eventi precedente e successivo nella catena. Ogni evento collegato mostra il proprio hash così puoi confermare visivamente che corrispondano.
+  </Step>
+</Steps>
+
+Per una verifica massiva su un periodo di audit, usa invece l'API.
+
+---
+
+## Verifica tramite l'API
+
+L'endpoint `/v1/events/verify` controlla un intervallo di eventi e restituisce un singolo risultato pass/fail con diagnostica completa.
+
+### Endpoint
+
+```
+GET https://api.auditrails.io/v1/events/verify
+```
+
+### Parametri di query
+
+| Parametro | Tipo | Predefinito | Descrizione |
+|-----------|------|---------|-------------|
+| `from_seq` | integer | 1 | Inizio dell'intervallo di sequenza da verificare (incluso). |
+| `to_seq` | integer | `from_seq + 999` | Fine dell'intervallo di sequenza da verificare (incluso). L'intervallo predefinito è di 1.000 eventi. |
+
+### Campi della risposta
+
+| Campo | Tipo | Descrizione |
+|-------|------|-------------|
+| `valid` | boolean | `true` se l'intero intervallo è integro; `false` se è stata trovata un'interruzione. |
+| `checked` | integer | Numero di eventi effettivamente esaminati. |
+| `first_seq` | integer | Primo numero di sequenza nell'intervallo verificato. |
+| `last_seq` | integer | Ultimo numero di sequenza nell'intervallo verificato. |
+| `broken_at` | integer | *(Solo se `valid: false`)* Numero di sequenza del primo evento interrotto. |
+| `broken_hash` | string | *(Solo se `valid: false`)* Il valore hash non valido trovato in `broken_at`. |
+
+### Esempi
+
+<CodeGroup>
+  ```bash Verifica un intervallo
+  curl -G https://api.auditrails.io/v1/events/verify \
+    -H "Authorization: Bearer at_live_..." \
+    -d "from_seq=1" \
+    -d "to_seq=5000"
+  ```
+
+  ```bash Verifica gli ultimi 1.000 eventi (predefinito)
+  curl -G https://api.auditrails.io/v1/events/verify \
+    -H "Authorization: Bearer at_live_..."
+  ```
+
+  ```bash Verifica una finestra specifica
+  curl -G https://api.auditrails.io/v1/events/verify \
+    -H "Authorization: Bearer at_live_..." \
+    -d "from_seq=10000" \
+    -d "to_seq=20000"
+  ```
+</CodeGroup>
+
+### Risposta integra
+
+```json
+{
+  "valid": true,
+  "checked": 500,
+  "first_seq": 1,
+  "last_seq": 500
+}
+```
+
+### Risposta con catena interrotta
+
+```json
+{
+  "valid": false,
+  "checked": 42,
+  "first_seq": 1,
+  "last_seq": 42,
+  "broken_at": 42,
+  "broken_hash": "fff3a9c2d1e4b5f6..."
+}
+```
+
+<Warning>
+  Una catena interrotta è una segnalazione di sicurezza critica. Se ricevi `"valid": false`, esporta immediatamente il risultato completo della verifica, conserva l'export corrente dei log (CSV) e avvia un'indagine sull'incidente. Non liquidarlo come un errore transitorio — AuditRails è progettato in modo che una catena integra restituisca sempre `valid: true`.
+</Warning>
+
+---
+
+## Per i revisori: verifica indipendente
+
+Se stai conducendo un audit esterno, puoi verificare i log di AuditRails senza affidarti all'output di verifica della piattaforma stessa.
+
+<Steps>
+  <Step title="Esegui la verifica per il periodo di audit">
+    Chiama `GET /v1/events/verify` impostando `from_seq` e `to_seq` per coprire il periodo di audit. Conferma che la risposta contenga `"valid": true`.
+  </Step>
+  <Step title="Esporta il CSV dei log">
+    Da **Dashboard → Log**, applica un filtro per data relativo al periodo di audit ed esporta in CSV. L'export include le colonne `chain_seq` e `hash` per ogni evento.
+  </Step>
+  <Step title="Ricalcola gli hash in modo indipendente">
+    Usando la formula del payload canonico e i dati esportati, ricalcola l'hash di ogni evento e confrontalo con la colonna `hash` nel CSV. Qualsiasi discrepanza indica una manomissione.
+
+    Il payload canonico è sempre il JSON di: `log_id`, `tenant_id`, `action`, `actor_id`, `resource`, `metadata` — in quest'ordine di chiavi, senza spazi extra.
+
+    ```python
+    import hashlib, json
+
+    def compute_hash(previous_hash: str, payload: dict, timestamp_ms: int) -> str:
+        canonical = json.dumps(payload, separators=(',', ':'), sort_keys=False)
+        data = previous_hash + canonical + str(timestamp_ms)
+        return hashlib.sha256(data.encode()).hexdigest()
+    ```
+  </Step>
+  <Step title="Documenta i risultati">
+    Registra i valori `first_seq`, `last_seq`, `checked` e `valid` della risposta API come parte del tuo pacchetto di evidenze di audit. Un risultato `valid: true` che copre l'intero periodo di audit soddisfa i requisiti di integrità della catena di hash per SOC 2, ISO 27001 A.8.15, DORA Art.6, PCI DSS 10.5 e il controllo di integrità dei log AMS-INT-2 del provvedimento del Garante.
+  </Step>
+</Steps>
+
+<Tip>
+  Condividi il ruolo RBAC di revisore con il tuo auditor esterno. Questo gli garantisce accesso alla dashboard in sola lettura per eseguire la verifica ed esportare le evidenze in CSV autonomamente, senza bisogno della tua chiave API.
+</Tip>
